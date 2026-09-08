@@ -12,6 +12,8 @@ This repository now includes a pinned Windows installation and read-only scan wo
 - `tools/czkawka/parse-results.ps1` - Converts supported Czkawka result JSON into a versioned normalized document while retaining the raw input path.
 - `tools/czkawka/tests/phase2-smoke.ps1` - Runs a deterministic grouped-result parser smoke test.
 - `tools/czkawka/tests/phase2-tests.ps1` - Runs the broader Phase 2 fixture and error-handling tests.
+- `tools/czkawka/repair-dates.ps1` - Produces a dry-run date-evidence report and supports explicitly approved timestamp changes with an undo manifest.
+- `tools/czkawka/tests/phase3-smoke.ps1` and `tools/czkawka/tests/phase3-tests.ps1` - Validate Phase 3 evidence, dry-run, approval, and undo behavior.
 - `.gitignore` - Keeps generated reports and local config artifacts out of source control.
 
 ### Commands
@@ -28,6 +30,13 @@ powershell -ExecutionPolicy Bypass -File .\tools\czkawka\install.ps1 -Version 12
 # Validate the Phase 2 result normalizer with PowerShell 7
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase2-smoke.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase2-tests.ps1
+
+# Inspect date evidence without changing files
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dates.ps1 -Path "\\server\photos" -Recurse
+
+# Apply a reviewed report using explicit decisions, then undo if needed
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dates.ps1 -ReviewPath .\reports\dates\date-review.json -DecisionPath .\reports\dates\decisions.json -Apply
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dates.ps1 -Undo -UndoManifestPath .\reports\dates\date-undo.jsonl
 ```
 
 ### Configuration
@@ -40,4 +49,7 @@ The checked-in `tools/czkawka/config.json` uses repository-relative local paths 
 - Cache is retained by default; the `-Fresh` switch maps to Czkawka's `-H` option for a cache bypass when needed.
 - The Phase 2 normalizer emits schema version `1`, preserving source scan, group membership, file metadata, reference state, and the raw input artifact path.
 - The normalizer retains warning, inaccessible-file, and stale-file evidence for later human review; it does not delete or alter files.
+- Date repair is dry-run by default. EXIF evidence takes precedence over filename evidence; folder dates are low-confidence, sidecars are excluded, and invalid, conflicting, or future dates are not applied automatically.
+- Timestamp changes require `-Apply`; the default policy changes CreationTime only, records an append-only undo manifest, and supports `-Undo`.
+- Saved reports are revalidated for file size and LastWriteTime before changes. Decision files support `skip`, `protect`, `approve`, and `manual` actions; manual decisions must include a `date` value.
 - No deletion or quarantine logic is enabled in this phase.

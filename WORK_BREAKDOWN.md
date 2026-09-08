@@ -6,13 +6,13 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 29%**
+**Overall implementation: 43%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
 | 1 | Czkawka CLI foundation | Complete | 100% | None |
 | 2 | Stable local result model | Complete | 100% | Phase 1 |
-| 3 | Metadata date repair utility | Not started | 0% | Phase 2 |
+| 3 | Metadata date repair utility | Complete | 100% | Phase 2 |
 | 4 | Confidence and human grouping | Not started | 0% | Phases 2-3 |
 | 5 | Native Windows review experience | Not started | 0% | Phase 4 |
 | 6 | Safe remediation and undo | Not started | 0% | Phase 5 |
@@ -113,19 +113,19 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 **Deliverables**
 
-- [ ] Add `tools/czkawka/repair-dates.ps1`.
-- [ ] Inspect EXIF `DateTimeOriginal` and digitized date first.
-- [ ] Add conservative filename parsing for `YYYY-MM-DD`, `YYYYMMDD`, and timestamp-style names.
-- [ ] Keep video/container metadata and sidecars out of the first implementation unless a tested built-in or approved dependency is available.
-- [ ] Treat folder names as lower-confidence evidence only.
-- [ ] Treat current filesystem CreationTime and LastWriteTime as transfer/copy evidence, not capture time.
-- [ ] Normalize timezone handling and reject conflicts, ambiguous dates, impossible dates, and unacceptable future dates.
-- [ ] Produce a dry-run report with current timestamps, proposed date, source evidence, confidence, and parsed token.
-- [ ] Add actions for accept one, accept high-confidence batch, skip, protect, and manual override.
-- [ ] Revalidate path, size, and timestamp before applying changes.
-- [ ] Default to changing CreationTime only; preserve LastWriteTime unless an explicit policy is selected.
-- [ ] Write an append-only audit and undo manifest.
-- [ ] Do not rewrite EXIF or rename files in the first version.
+- [x] Add `tools/czkawka/repair-dates.ps1`.
+- [x] Inspect EXIF `DateTimeOriginal` and digitized date first.
+- [x] Add conservative filename parsing for `YYYY-MM-DD`, `YYYYMMDD`, and timestamp-style names.
+- [x] Keep video/container metadata and sidecars out of the first implementation unless a tested built-in or approved dependency is available.
+- [x] Treat folder names as lower-confidence evidence only.
+- [x] Treat current filesystem CreationTime and LastWriteTime as transfer/copy evidence, not capture time.
+- [x] Normalize timezone handling and reject conflicts, ambiguous dates, impossible dates, and unacceptable future dates.
+- [x] Produce a dry-run report with current timestamps, proposed date, source evidence, confidence, and parsed token.
+- [x] Add actions for accept one, accept high-confidence batch, skip, protect, and manual override.
+- [x] Revalidate path, size, and timestamp before applying changes.
+- [x] Default to changing CreationTime only; preserve LastWriteTime unless an explicit policy is selected.
+- [x] Write an append-only audit and undo manifest.
+- [x] Do not rewrite EXIF or rename files in the first version.
 
 **Acceptance checks**
 
@@ -138,11 +138,11 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - Undo restores original timestamps.
 - Fixture coverage includes timezone offsets, camera names, copied files, sidecars, inaccessible files, and impossible dates.
 
-**Status:** Not started, 0%
+**Status:** Complete, 100%
 
 **Agent update log:**
 
-- No work recorded.
+- 2026-09-08: Completed `repair-dates.ps1` with dry-run date evidence, EXIF/filename/folder precedence, invalid and future-date rejection, explicit review actions, saved-report approval, size/mtime stale revalidation, CreationTime-only policy, append-only undo, and safe restoration. Phase 3 tests cover generated EXIF precedence/conflict, folder and filename evidence, sidecars, future/impossible dates, dry-run, approval, stale refusal, and undo under PowerShell 7.6.5.
 
 ## Phase 4: Confidence and Human-Oriented Grouping
 
