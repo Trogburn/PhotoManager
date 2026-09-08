@@ -17,6 +17,8 @@ This repository now includes a pinned Windows installation and read-only scan wo
 - `tools/czkawka/classify-results.ps1` - Merges overlapping normalized findings into explainable, advisory review groups with confidence tiers and keep suggestions.
 - `tools/czkawka/tests/phase4-tests.ps1` - Validates deterministic grouping, confidence tiers, labels, evidence retention, and protected-reference behavior.
 - `tools/czkawka/review.ps1` - Native Windows reviewer for one classified group at a time, with previews, persisted decisions, and static HTML export.
+- `tools/czkawka/remediate.ps1` - Dry-run-first quarantine workflow with stale-file checks, transaction logging, and guarded undo.
+- `tools/czkawka/tests/phase6-tests.ps1` - Validates remediation safety against temporary files.
 - `.gitignore` - Keeps generated reports and local config artifacts out of source control.
 
 ### Commands
@@ -46,6 +48,13 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dat
 # Apply a reviewed report using explicit decisions, then undo if needed
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dates.ps1 -ReviewPath .\reports\dates\date-review.json -DecisionPath .\reports\dates\decisions.json -Apply
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dates.ps1 -Undo -UndoManifestPath .\reports\dates\date-undo.jsonl
+
+# Preview quarantine actions without moving files
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\remediate.ps1 -InputPath .\reports\czkawka\classified.json -DecisionPath .\reports\review\decisions.json -QuarantineRoot .\reports\quarantine
+
+# Apply explicitly requested quarantine actions, then undo if needed
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\remediate.ps1 -InputPath .\reports\czkawka\classified.json -DecisionPath .\reports\review\decisions.json -QuarantineRoot .\reports\quarantine -Apply
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\remediate.ps1 -DecisionPath .\reports\review\decisions.json -TransactionManifestPath .\reports\quarantine\transactions.jsonl -Undo
 ```
 
 ### Configuration
@@ -62,4 +71,4 @@ The checked-in `tools/czkawka/config.json` uses repository-relative local paths 
 - Timestamp changes require `-Apply`; the default policy changes CreationTime only, records an append-only undo manifest, and supports `-Undo`.
 - Saved reports are revalidated for file size and LastWriteTime before changes. Decision files support `skip`, `protect`, `approve`, and `manual` actions; manual decisions must include a `date` value.
 - Classification is advisory only. It retains original evidence edges, marks protected/reference items, and never deletes, moves, or changes timestamps.
-- No deletion or quarantine logic is enabled in this phase.
+- Remediation is quarantine-only and dry-run by default. It revalidates size and modified time, refuses stale/protected/excluded files, uses collision-safe destinations, appends transactions, and never enables Czkawka deletion flags.

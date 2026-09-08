@@ -6,7 +6,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 71%**
+**Overall implementation: 86%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
@@ -15,7 +15,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 | 3 | Metadata date repair utility | Complete | 100% | Phase 2 |
 | 4 | Confidence and human grouping | Complete | 100% | Phases 2-3 |
 | 5 | Native Windows review experience | Complete | 100% | Phase 4 |
-| 6 | Safe remediation and undo | Not started | 0% | Phase 5 |
+| 6 | Safe remediation and undo | Complete | 100% | Phase 5 |
 | 7 | Operational polish | Not started | 0% | Phase 6 |
 
 ### Status Definitions
@@ -231,11 +231,11 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - Protected files cannot be moved.
 - Undo restores a quarantined file without overwriting a newer destination.
 
-**Status:** Not started, 0%
+**Status:** Complete, 100%
 
 **Agent update log:**
 
-- No work recorded.
+- 2026-09-08: Added `remediate.ps1` with dry-run-first quarantine, explicit decision filtering, protected/reference and excluded-path refusal, size/mtime stale checks, collision-safe destinations, append-only transaction logging, and guarded undo. Temporary-file acceptance tests passed for dry-run, approved move, protection, stale refusal, collisions, logging, and undo under PowerShell 7.6.5. Czkawka deletion flags remain unused.
 
 ## Phase 7: Operational Polish
 

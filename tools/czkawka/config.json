@@ -12,6 +12,7 @@
   "scan": {
     "uncRoot": "\\\\YOUR-SERVER\\YOUR-SHARE\\Photos",
     "localReportRoot": ".\\reports\\czkawka",
+    "quarantineRoot": ".\\reports\\quarantine",
     "mode": "read-only",
     "fresh": false,
     "duplicate": {
