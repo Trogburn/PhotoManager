@@ -30,10 +30,14 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phas
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase2-tests.ps1
 ```
 
+### Configuration
+The checked-in `tools/czkawka/config.json` uses repository-relative local paths and obvious `YOUR-SERVER`/`YOUR-SHARE` UNC placeholders. Replace those UNC values with the actual share and protected/preferred folders before scanning. The local executable is installed under `tools/czkawka/bin`, and reports are written under `reports/czkawka`.
+
 ### Safety notes
 - The scan workflow rejects non-UNC roots and missing shares before launching Czkawka.
 - Raw scan output and metadata are written under the local reports directory so results remain local and reviewable.
 - Exit codes `0` and `11` are treated as successful scan outcomes; other exit codes fail early.
 - Cache is retained by default; the `-Fresh` switch maps to Czkawka's `-H` option for a cache bypass when needed.
 - The Phase 2 normalizer emits schema version `1`, preserving source scan, group membership, file metadata, reference state, and the raw input artifact path.
+- The normalizer retains warning, inaccessible-file, and stale-file evidence for later human review; it does not delete or alter files.
 - No deletion or quarantine logic is enabled in this phase.

@@ -6,12 +6,12 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 25%**
+**Overall implementation: 29%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
 | 1 | Czkawka CLI foundation | Complete | 100% | None |
-| 2 | Stable local result model | In progress | 75% | Phase 1 |
+| 2 | Stable local result model | Complete | 100% | Phase 1 |
 | 3 | Metadata date repair utility | Not started | 0% | Phase 2 |
 | 4 | Confidence and human grouping | Not started | 0% | Phases 2-3 |
 | 5 | Native Windows review experience | Not started | 0% | Phase 4 |
@@ -76,6 +76,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 **Agent update log:**
 
 - 2026-09-08: Added the pinned install script, local config, read-only scan wrapper, and local artifact storage. Validated script syntax with a PowerShell parser check; both scripts parsed successfully.
+- 2026-09-08: Replaced machine-specific-looking defaults with repository-relative installer/report paths and explicit `YOUR-SERVER`/`YOUR-SHARE` UNC placeholders. Configuration JSON, PowerShell syntax, and Phase 2 regression tests passed.
 
 ## Phase 2: Stable Local Result Model
 
@@ -84,12 +85,12 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 **Deliverables**
 
 - [x] Add `tools/czkawka/parse-results.ps1` or a small parser module.
-- [ ] Parse `dup` HASH output, including empty and reference-directory variants.
+- [x] Parse `dup` HASH output, including empty and reference-directory variants.
 - [x] Parse grouped `image` output, including reference-directory variants.
 - [x] Emit a versioned normalized result document.
 - [x] Preserve source scan, Czkawka version, raw artifact paths, scan root, and scan timestamp.
 - [x] Capture path, size, modified time, hash, width, height, perceptual difference, reference state, and group membership.
-- [ ] Add fixtures for valid results, empty results, malformed JSON, warnings, inaccessible files, and stale files.
+- [x] Add fixtures for valid results, empty results, malformed JSON, warnings, inaccessible files, and stale files.
 - [x] Add deterministic parser tests.
 
 **Acceptance checks**
@@ -100,11 +101,11 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - UNC paths round-trip without accidental normalization.
 - Schema version is recorded in every normalized result.
 
-**Status:** In progress, 75%
+**Status:** Complete, 100%
 
 **Agent update log:**
 
-- 2026-09-08: Added deterministic normalization for grouped and flat results, image/reference and empty fixtures, metadata propagation, actionable shape errors, and expanded parser tests. PowerShell 7.6.5 smoke, fixture, and syntax checks passed. Remaining work is dup reference-directory coverage plus warnings, inaccessible-file, and stale-file fixtures.
+- 2026-09-08: Completed deterministic normalization for grouped and flat results, duplicate/image reference variants, empty results, warnings, inaccessible files, stale entries, metadata propagation, and actionable shape errors. PowerShell 7.6.5 smoke, fixture, and syntax checks passed.
 
 ## Phase 3: Metadata Date Repair Utility
 
