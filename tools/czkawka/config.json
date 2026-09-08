@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "version": "2026-09-08",
+  "czkawka": {
+    "version": "12.0.1",
+    "downloadUrl": "https://github.com/qarmin/czkawka/releases/download/12.0.1/windows_czkawka_cli_x86_64.zip",
+    "checksum": "REPLACE_WITH_PUBLISHED_SHA256",
+    "installDirectory": "C:\\Tools\\czkawka",
+    "exePath": "C:\\Tools\\czkawka\\czkawka_cli.exe",
+    "allowUpdate": false
+  },
+  "scan": {
+    "uncRoot": "\\\\NAS\\Photos",
+    "localReportRoot": "C:\\Reports\\czkawka",
+    "mode": "read-only",
+    "fresh": false,
+    "duplicate": {
+      "command": "dup",
+      "subMode": "hash",
+      "hashSize": 16,
+      "includeReferenceFolders": false,
+      "excludePaths": []
+    },
+    "image": {
+      "command": "image",
+      "threshold": 8,
+      "algorithm": "gradient",
+      "geometricInvariance": false,
+      "hashSize": 16,
+      "includeReferenceFolders": false,
+      "excludePaths": []
+    },
+    "protectedPaths": [
+      "C:\\Users\\Public\\Pictures",
+      "\\\\NAS\\Reference"
+    ],
+    "excludedPaths": [],
+    "preferredDirectories": [
+      "\\\\NAS\\Photos\\Keep",
+      "\\\\NAS\\Photos\\Archive"
+    ],
+    "allowedExitCodes": [
+      0,
+      11
+    ]
+  }
+}

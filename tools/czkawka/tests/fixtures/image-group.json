@@ -1,0 +1,28 @@
+[
+  {
+    "groupId": "image-001",
+    "kind": "similar-image",
+    "isReference": true,
+    "entries": [
+      {
+        "path": "\\\\NAS\\Photos\\Reference\\original.jpg",
+        "size": 2048,
+        "modifiedTime": "2024-02-01T10:00:00Z",
+        "width": 1920,
+        "height": 1080,
+        "difference": 3.5,
+        "isReference": true,
+        "referenceState": "reference"
+      },
+      {
+        "path": "\\\\NAS\\Photos\\Incoming\\copy.jpg",
+        "size": 1024,
+        "modifiedTime": "2024-02-01T10:00:00Z",
+        "width": 1280,
+        "height": 720,
+        "perceptualDifference": 3.5,
+        "referenceState": "candidate"
+      }
+    ]
+  }
+]

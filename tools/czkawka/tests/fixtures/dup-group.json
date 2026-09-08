@@ -1,0 +1,23 @@
+[
+  {
+    "groupId": "dup-001",
+    "kind": "duplicate",
+    "isReference": false,
+    "entries": [
+      {
+        "path": "\\\\server\\photos\\incoming\\a.jpg",
+        "size": 1024,
+        "modifiedTime": "2024-01-15T08:00:00Z",
+        "hash": "abc123",
+        "source": "dup"
+      },
+      {
+        "path": "\\\\server\\photos\\incoming\\b.jpg",
+        "size": 1024,
+        "modifiedTime": "2024-01-15T08:00:00Z",
+        "hash": "abc123",
+        "source": "dup"
+      }
+    ]
+  }
+]

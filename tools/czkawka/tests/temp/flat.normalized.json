@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "source": "czkawka",
+  "inputPath": "C:\\dev\\GitHub\\QnapServerManagement\\tools\\czkawka\\tests\\fixtures\\dup-flat.json",
+  "rawArtifactPath": "C:\\dev\\GitHub\\QnapServerManagement\\tools\\czkawka\\tests\\fixtures\\dup-flat.json",
+  "sourceScan": "image",
+  "czkawkaVersion": "12.0.1",
+  "scanRoot": "\\\\NAS\\Photos",
+  "scanTimestampUtc": "2026-09-08T00:00:00Z",
+  "generatedAtUtc": "2026-09-08T06:58:43.9617961Z",
+  "groupCount": 2,
+  "groups": [
+    {
+      "schemaVersion": 1,
+      "source": "czkawka",
+      "groupId": "group-0",
+      "kind": "flat",
+      "isReference": false,
+      "entries": [
+        {
+          "path": "\\\\server\\photos\\a.jpg",
+          "size": 512,
+          "modifiedTime": "2024-03-01T12:00:00Z",
+          "hash": "hash-a",
+          "width": null,
+          "height": null,
+          "perceptualDifference": null,
+          "sourceScan": "image",
+          "groupId": "group-0",
+          "isReference": false,
+          "referenceState": "not-set"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "source": "czkawka",
+      "groupId": "group-1",
+      "kind": "flat",
+      "isReference": false,
+      "entries": [
+        {
+          "path": "\\\\server\\photos\\b.jpg",
+          "size": 512,
+          "modifiedTime": "2024-03-01T12:00:00Z",
+          "hash": "hash-a",
+          "width": null,
+          "height": null,
+          "perceptualDifference": null,
+          "sourceScan": "image",
+          "groupId": "group-1",
+          "isReference": false,
+          "referenceState": "not-set"
+        }
+      ]
+    }
+  ]
+}
