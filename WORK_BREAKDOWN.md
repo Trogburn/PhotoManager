@@ -6,14 +6,14 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 43%**
+**Overall implementation: 57%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
 | 1 | Czkawka CLI foundation | Complete | 100% | None |
 | 2 | Stable local result model | Complete | 100% | Phase 1 |
 | 3 | Metadata date repair utility | Complete | 100% | Phase 2 |
-| 4 | Confidence and human grouping | Not started | 0% | Phases 2-3 |
+| 4 | Confidence and human grouping | Complete | 100% | Phases 2-3 |
 | 5 | Native Windows review experience | Not started | 0% | Phase 4 |
 | 6 | Safe remediation and undo | Not started | 0% | Phase 5 |
 | 7 | Operational polish | Not started | 0% | Phase 6 |
@@ -150,14 +150,14 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 **Deliverables**
 
-- [ ] Add `tools/czkawka/classify-results.ps1`.
-- [ ] Merge overlapping exact/image findings while retaining original evidence edges.
-- [ ] Implement visible tiers: Very high, High, Medium, and Review carefully.
-- [ ] Add explainable labels: exact duplicate, resized copy, likely thumbnail, downloaded copy, filename variant, and cross-folder match.
-- [ ] Show dimensions, size ratios, perceptual difference, hashes, paths, and evidence sources.
-- [ ] Add configurable keep recommendations based on preferred folders, dimensions, file size, filename quality, and protected/reference status.
-- [ ] Ensure recommendations are advisory and never perform actions.
-- [ ] Add deterministic classifier tests.
+- [x] Add `tools/czkawka/classify-results.ps1`.
+- [x] Merge overlapping exact/image findings while retaining original evidence edges.
+- [x] Implement visible tiers: Very high, High, Medium, and Review carefully.
+- [x] Add explainable labels: exact duplicate, resized copy, likely thumbnail, downloaded copy, filename variant, and cross-folder match.
+- [x] Show dimensions, size ratios, perceptual difference, hashes, paths, and evidence sources.
+- [x] Add configurable keep recommendations based on preferred folders, dimensions, file size, filename quality, and protected/reference status.
+- [x] Ensure recommendations are advisory and never perform actions.
+- [x] Add deterministic classifier tests.
 
 **Acceptance checks**
 
@@ -167,11 +167,11 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - Protected/reference paths cannot be recommended for removal.
 - Classifier output is stable for the same normalized input.
 
-**Status:** Not started, 0%
+**Status:** Complete, 100%
 
 **Agent update log:**
 
-- No work recorded.
+- 2026-09-08: Added deterministic classifier grouping with transitive exact/image evidence, four confidence tiers, explainable labels, protected/reference safeguards, configurable advisory keep recommendations, and no-action output. Phase 4 tests passed under PowerShell 7.6.5.
 
 ## Phase 5: Native Windows Review Experience
 

@@ -14,6 +14,8 @@ This repository now includes a pinned Windows installation and read-only scan wo
 - `tools/czkawka/tests/phase2-tests.ps1` - Runs the broader Phase 2 fixture and error-handling tests.
 - `tools/czkawka/repair-dates.ps1` - Produces a dry-run date-evidence report and supports explicitly approved timestamp changes with an undo manifest.
 - `tools/czkawka/tests/phase3-smoke.ps1` and `tools/czkawka/tests/phase3-tests.ps1` - Validate Phase 3 evidence, dry-run, approval, and undo behavior.
+- `tools/czkawka/classify-results.ps1` - Merges overlapping normalized findings into explainable, advisory review groups with confidence tiers and keep suggestions.
+- `tools/czkawka/tests/phase4-tests.ps1` - Validates deterministic grouping, confidence tiers, labels, evidence retention, and protected-reference behavior.
 - `.gitignore` - Keeps generated reports and local config artifacts out of source control.
 
 ### Commands
@@ -30,6 +32,9 @@ powershell -ExecutionPolicy Bypass -File .\tools\czkawka\install.ps1 -Version 12
 # Validate the Phase 2 result normalizer with PowerShell 7
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase2-smoke.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase2-tests.ps1
+
+# Classify normalized findings without changing files
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\classify-results.ps1 -InputPath .\reports\czkawka\normalized.json
 
 # Inspect date evidence without changing files
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dates.ps1 -Path "\\server\photos" -Recurse
@@ -52,4 +57,5 @@ The checked-in `tools/czkawka/config.json` uses repository-relative local paths 
 - Date repair is dry-run by default. EXIF evidence takes precedence over filename evidence; folder dates are low-confidence, sidecars are excluded, and invalid, conflicting, or future dates are not applied automatically.
 - Timestamp changes require `-Apply`; the default policy changes CreationTime only, records an append-only undo manifest, and supports `-Undo`.
 - Saved reports are revalidated for file size and LastWriteTime before changes. Decision files support `skip`, `protect`, `approve`, and `manual` actions; manual decisions must include a `date` value.
+- Classification is advisory only. It retains original evidence edges, marks protected/reference items, and never deletes, moves, or changes timestamps.
 - No deletion or quarantine logic is enabled in this phase.
