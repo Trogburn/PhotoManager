@@ -1,6 +1,8 @@
 # QnapServerManagement
 Utilities for managing a Qnap Server that contains mostly Videos and Audio in a Plex server, along with Photo and Video backup.
 
+For a beginner-focused, copy-paste operating guide, see [USER_GUIDE.md](USER_GUIDE.md). The recommended one-command workflow is `tools/czkawka/run-workflow.ps1`; it scans, normalizes, classifies, and opens the reviewer without moving files.
+
 ## Phase 1: Czkawka CLI foundation
 
 This repository now includes a pinned Windows installation and read-only scan workflow for the Czkawka CLI.
@@ -17,6 +19,7 @@ This repository now includes a pinned Windows installation and read-only scan wo
 - `tools/czkawka/classify-results.ps1` - Merges overlapping normalized findings into explainable, advisory review groups with confidence tiers and keep suggestions.
 - `tools/czkawka/tests/phase4-tests.ps1` - Validates deterministic grouping, confidence tiers, labels, evidence retention, and protected-reference behavior.
 - `tools/czkawka/review.ps1` - Native Windows reviewer for one classified group at a time, with previews, persisted decisions, and static HTML export.
+- `tools/czkawka/run-workflow.ps1` - Runs scan, normalization, classification, optional date review, and reviewer launch as one safe workflow.
 - `tools/czkawka/remediate.ps1` - Dry-run-first quarantine workflow with stale-file checks, transaction logging, and guarded undo.
 - `tools/czkawka/tests/phase6-tests.ps1` - Validates remediation safety against temporary files.
 - `.gitignore` - Keeps generated reports and local config artifacts out of source control.

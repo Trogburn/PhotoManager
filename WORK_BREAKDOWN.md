@@ -6,7 +6,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 86%**
+**Overall implementation: 91%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
@@ -16,7 +16,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 | 4 | Confidence and human grouping | Complete | 100% | Phases 2-3 |
 | 5 | Native Windows review experience | Complete | 100% | Phase 4 |
 | 6 | Safe remediation and undo | Complete | 100% | Phase 5 |
-| 7 | Operational polish | Not started | 0% | Phase 6 |
+| 7 | Operational polish | In progress | 40% | Phase 6 |
 
 ### Status Definitions
 
@@ -259,11 +259,11 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - Runtime artifacts are not accidentally committed.
 - All automated checks pass.
 
-**Status:** Not started, 0%
+**Status:** In progress, 40%
 
 **Agent update log:**
 
-- No work recorded.
+- 2026-09-08: Added `USER_GUIDE.md` with copy-paste commands, safety checkpoints, troubleshooting, recovery, and a beginner workflow. Added `run-workflow.ps1` to scan, normalize, classify, optionally produce date review, and open the reviewer in one safe command. Wrapper syntax and Phase 1-6 validation passed. Remaining Phase 7 work includes checksum/update guidance, attribution, scheduling guidance, and final end-to-end validation against an installed CLI.
 
 ## Future Decisions
 
