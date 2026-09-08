@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "source": "czkawka",
+  "inputPath": "fixture.json",
+  "groups": [
+    {
+      "schemaVersion": 1,
+      "source": "czkawka",
+      "groupId": "dup-001",
+      "kind": "duplicate",
+      "isReference": false,
+      "entries": [
+        { "path": "\\\\server\\photos\\Keep\\2024-01-01-original.jpg", "size": 5000, "hash": "same-hash", "width": 2000, "height": 1500, "isReference": false, "referenceState": "not-set" },
+        { "path": "\\\\server\\photos\\Incoming\\copy.jpg", "size": 5000, "hash": "same-hash", "width": 2000, "height": 1500, "isReference": false, "referenceState": "not-set" }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "source": "czkawka",
+      "groupId": "image-001",
+      "kind": "similar-image",
+      "isReference": false,
+      "entries": [
+        { "path": "\\\\server\\photos\\Incoming\\copy.jpg", "size": 5000, "hash": "same-hash", "width": 2000, "height": 1500, "perceptualDifference": 0.5, "isReference": false, "referenceState": "not-set" },
+        { "path": "\\\\server\\photos\\Incoming\\resized.jpg", "size": 1200, "width": 1000, "height": 750, "perceptualDifference": 0.5, "isReference": false, "referenceState": "not-set" }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "source": "czkawka",
+      "groupId": "image-002",
+      "kind": "similar-image",
+      "isReference": true,
+      "entries": [
+        { "path": "\\\\server\\photos\\Reference\\original.jpg", "size": 9000, "width": 2400, "height": 1800, "perceptualDifference": 4, "isReference": true, "referenceState": "reference" },
+        { "path": "\\\\server\\photos\\Incoming\\thumbnail.jpg", "size": 200, "width": 240, "height": 180, "perceptualDifference": 4, "isReference": false, "referenceState": "candidate" }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "source": "czkawka",
+      "groupId": "image-003",
+      "kind": "similar-image",
+      "isReference": false,
+      "entries": [
+        { "path": "C:\\Users\\Public\\Pictures\\weak-a.jpg", "size": 300, "width": 800, "height": 600, "perceptualDifference": 12, "isReference": false, "referenceState": "not-set" },
+        { "path": "C:\\Users\\Public\\Pictures\\weak-b.jpg", "size": 280, "width": 800, "height": 600, "perceptualDifference": 12, "isReference": false, "referenceState": "not-set" }
+      ]
+    }
+  ]
+}
