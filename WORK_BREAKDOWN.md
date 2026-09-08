@@ -6,7 +6,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 91%**
+**Overall implementation: 89%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
@@ -15,7 +15,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 | 3 | Metadata date repair utility | Complete | 100% | Phase 2 |
 | 4 | Confidence and human grouping | Complete | 100% | Phases 2-3 |
 | 5 | Native Windows review experience | Complete | 100% | Phase 4 |
-| 6 | Safe remediation and undo | Complete | 100% | Phase 5 |
+| 6 | Safe remediation and undo | In progress | 85% | Phase 5 |
 | 7 | Operational polish | In progress | 40% | Phase 6 |
 
 ### Status Definitions
@@ -180,14 +180,14 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 **Deliverables**
 
-- [ ] Add `tools/czkawka/review.ps1` using a small native PowerShell/.NET GUI.
-- [ ] Display side-by-side image previews with graceful handling for unavailable images.
-- [ ] Show confidence tier, explanation, evidence, path, filename, dimensions, size, modified time, proposed date, and suggested keep.
-- [ ] Add quick actions: keep suggestion, choose another keep, quarantine selected, skip/defer, open file, open folder, and protect.
-- [ ] Include date-repair proposals in the same review workflow or provide a clear linked review screen.
-- [ ] Require explicit confirmation for every quarantine or timestamp change.
-- [ ] Generate static HTML/JSON reports for search and archival, while keeping filesystem actions native.
-- [ ] Track decisions so deferred groups return to the reviewer.
+- [x] Add `tools/czkawka/review.ps1` using a small native PowerShell/.NET GUI.
+- [x] Display side-by-side image previews with graceful handling for unavailable images.
+- [x] Show confidence tier, explanation, evidence, path, filename, dimensions, size, modified time, proposed date, and suggested keep.
+- [x] Add quick actions: keep suggestion, choose another keep, quarantine selected, skip/defer, open file, open folder, and protect.
+- [x] Include date-repair proposals in the same review workflow or provide a clear linked review screen.
+- [x] Require explicit confirmation for every quarantine or timestamp change.
+- [x] Generate static HTML/JSON reports for search and archival, while keeping filesystem actions native.
+- [x] Track decisions so deferred groups return to the reviewer.
 
 **Acceptance checks**
 
@@ -210,16 +210,16 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 **Deliverables**
 
-- [ ] Add `tools/czkawka/remediate.ps1`.
-- [ ] Use quarantine rather than direct deletion.
-- [ ] Make quarantine location configurable; test a dedicated folder on the same share first.
-- [ ] Preserve relative source paths and use collision-safe destination names.
+- [x] Add `tools/czkawka/remediate.ps1`.
+- [x] Use quarantine rather than direct deletion.
+- [x] Make quarantine location configurable; test a dedicated folder on the same share first.
+- [x] Preserve relative source paths and use collision-safe destination names.
 - [ ] Revalidate existence, size, modified time, and hash where available before moving.
-- [ ] Refuse stale or changed entries.
-- [ ] Write an append-only transaction manifest.
-- [ ] Add an undo command that will not overwrite newer files.
-- [ ] Add dry-run mode, protected paths, excluded paths, and summaries of moved/skipped/failed files.
-- [ ] Keep Czkawka deletion flags out of the workflow.
+- [x] Refuse stale or changed entries.
+- [x] Write an append-only transaction manifest.
+- [x] Add an undo command that will not overwrite newer files.
+- [x] Add dry-run mode, protected paths, excluded paths, and summaries of moved/skipped/failed files.
+- [x] Keep Czkawka deletion flags out of the workflow.
 
 **Acceptance checks**
 
@@ -231,11 +231,11 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - Protected files cannot be moved.
 - Undo restores a quarantined file without overwriting a newer destination.
 
-**Status:** Complete, 100%
+**Status:** In progress, 85%
 
 **Agent update log:**
 
-- 2026-09-08: Added `remediate.ps1` with dry-run-first quarantine, explicit decision filtering, protected/reference and excluded-path refusal, size/mtime stale checks, collision-safe destinations, append-only transaction logging, and guarded undo. Temporary-file acceptance tests passed for dry-run, approved move, protection, stale refusal, collisions, logging, and undo under PowerShell 7.6.5. Czkawka deletion flags remain unused.
+- 2026-09-08: Added `remediate.ps1` with dry-run-first quarantine, explicit decision filtering, protected/reference and excluded-path refusal, size/mtime stale checks, collision-safe destinations, append-only transaction logging, and guarded undo. Temporary-file acceptance tests passed for dry-run, approved move, protection, stale refusal, collisions, logging, and undo under PowerShell 7.6.5. Remaining verification/implementation gaps: hash revalidation where comparable evidence exists, a real same-share quarantine test, and a permission-denied move test. Czkawka deletion flags remain unused.
 
 ## Phase 7: Operational Polish
 
@@ -243,13 +243,13 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 **Deliverables**
 
-- [ ] Update `README.md` with installation, configuration, UNC permissions, scan/review/remediation, supported formats, cache behavior, and recovery.
+- [x] Update `README.md` with installation, configuration, UNC permissions, scan/review/remediation, supported formats, cache behavior, and recovery.
 - [ ] Add version/checksum update guidance without silent executable replacement.
 - [ ] Document third-party binary/license attribution.
 - [ ] Add optional Task Scheduler guidance only for scan/report jobs.
 - [ ] Ensure scheduled jobs never quarantine automatically.
-- [ ] Add final PowerShell syntax, parser, classifier, date-repair, review, and remediation checks.
-- [ ] Add or update `.gitignore` for runtime reports, caches, and local configuration secrets.
+- [x] Add final PowerShell syntax, parser, classifier, date-repair, review, and remediation checks.
+- [x] Add or update `.gitignore` for runtime reports, caches, and local configuration secrets.
 
 **Acceptance checks**
 
@@ -264,6 +264,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 **Agent update log:**
 
 - 2026-09-08: Added `USER_GUIDE.md` with copy-paste commands, safety checkpoints, troubleshooting, recovery, and a beginner workflow. Added `run-workflow.ps1` to scan, normalize, classify, optionally produce date review, and open the reviewer in one safe command. Wrapper syntax and Phase 1-6 validation passed. Remaining Phase 7 work includes checksum/update guidance, attribution, scheduling guidance, and final end-to-end validation against an installed CLI.
+- 2026-09-08: Synchronized completed Phase 5 and Phase 6 deliverable checkboxes with their 100% statuses and marked the completed Phase 7 documentation/check-validation deliverables.
 
 ## Future Decisions
 
