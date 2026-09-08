@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [string]$Version = '12.0.1',
-    [string]$InstallDirectory = 'C:\Tools\czkawka',
+    [string]$InstallDirectory = (Join-Path $PSScriptRoot 'bin'),
     [string]$Checksum = '',
     [switch]$SkipChecksum,
     [switch]$Force

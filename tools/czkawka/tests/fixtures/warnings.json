@@ -1,0 +1,15 @@
+[
+  {
+    "groupId": "warning-001",
+    "kind": "duplicate",
+    "entries": [
+      {
+        "path": "\\\\server\\photos\\warning.jpg",
+        "size": 128,
+        "hash": "warning-hash",
+        "warning": "metadata unavailable"
+      }
+    ],
+    "warnings": ["One file had incomplete metadata"]
+  }
+]

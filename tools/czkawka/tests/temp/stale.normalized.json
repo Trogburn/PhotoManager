@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "source": "czkawka",
+  "inputPath": "C:\\dev\\GitHub\\QnapServerManagement\\tools\\czkawka\\tests\\fixtures\\stale.json",
+  "rawArtifactPath": "C:\\dev\\GitHub\\QnapServerManagement\\tools\\czkawka\\tests\\fixtures\\stale.json",
+  "sourceScan": "image",
+  "czkawkaVersion": "12.0.1",
+  "scanRoot": "\\\\NAS\\Photos",
+  "scanTimestampUtc": "2026-09-08T00:00:00Z",
+  "generatedAtUtc": "2026-09-08T07:02:49.5949522Z",
+  "groupCount": 1,
+  "groups": [
+    {
+      "schemaVersion": 1,
+      "source": "czkawka",
+      "groupId": "stale-001",
+      "kind": "duplicate",
+      "isReference": false,
+      "warnings": null,
+      "entries": [
+        {
+          "path": "\\\\server\\photos\\changed.jpg",
+          "size": 256,
+          "modifiedTime": "2024-05-01T09:00:00Z",
+          "hash": "old-hash",
+          "width": null,
+          "height": null,
+          "perceptualDifference": null,
+          "sourceScan": "image",
+          "groupId": "stale-001",
+          "isReference": false,
+          "referenceState": "not-set",
+          "warning": null,
+          "accessState": "accessible",
+          "error": null,
+          "isStale": true,
+          "staleReason": "size-or-time-changed"
+        }
+      ]
+    }
+  ]
+}

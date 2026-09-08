@@ -7,7 +7,7 @@
   "czkawkaVersion": "",
   "scanRoot": "",
   "scanTimestampUtc": "",
-  "generatedAtUtc": "2026-09-08T06:58:43.6045296Z",
+  "generatedAtUtc": "2026-09-08T07:01:32.0363064Z",
   "groupCount": 1,
   "groups": [
     {
@@ -16,6 +16,7 @@
       "groupId": "dup-001",
       "kind": "duplicate",
       "isReference": false,
+      "warnings": null,
       "entries": [
         {
           "path": "\\\\server\\photos\\incoming\\a.jpg",
@@ -28,7 +29,12 @@
           "sourceScan": "raw-czkawka",
           "groupId": "dup-001",
           "isReference": false,
-          "referenceState": "not-set"
+          "referenceState": "not-set",
+          "warning": null,
+          "accessState": "accessible",
+          "error": null,
+          "isStale": false,
+          "staleReason": null
         },
         {
           "path": "\\\\server\\photos\\incoming\\b.jpg",
@@ -41,7 +47,12 @@
           "sourceScan": "raw-czkawka",
           "groupId": "dup-001",
           "isReference": false,
-          "referenceState": "not-set"
+          "referenceState": "not-set",
+          "warning": null,
+          "accessState": "accessible",
+          "error": null,
+          "isStale": false,
+          "staleReason": null
         }
       ]
     }

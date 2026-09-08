@@ -1,0 +1,15 @@
+[
+  {
+    "groupId": "inaccessible-001",
+    "kind": "duplicate",
+    "entries": [
+      {
+        "path": "\\\\server\\photos\\offline.jpg",
+        "size": 0,
+        "hash": null,
+        "access": "inaccessible",
+        "error": "Access denied"
+      }
+    ]
+  }
+]

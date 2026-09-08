@@ -58,6 +58,26 @@ if ($flat.groupCount -ne 2 -or $flat.groups[0].groupId -ne 'group-0' -or $flat.g
     throw 'Flat results did not receive deterministic group IDs.'
 }
 
+$reference = Invoke-Parser -Fixture 'dup-reference.json' -Name 'reference'
+if (-not $reference.groups[0].isReference -or $reference.groups[0].entries[0].referenceState -ne 'reference') {
+    throw 'Duplicate reference-directory state did not normalize.'
+}
+
+$warnings = Invoke-Parser -Fixture 'warnings.json' -Name 'warnings'
+if (@($warnings.groups[0].warnings).Count -ne 1 -or $warnings.groups[0].entries[0].warning -ne 'metadata unavailable') {
+    throw 'Warning evidence did not normalize.'
+}
+
+$inaccessible = Invoke-Parser -Fixture 'inaccessible.json' -Name 'inaccessible'
+if ($inaccessible.groups[0].entries[0].accessState -ne 'inaccessible' -or $inaccessible.groups[0].entries[0].error -ne 'Access denied') {
+    throw 'Inaccessible-file evidence did not normalize.'
+}
+
+$stale = Invoke-Parser -Fixture 'stale.json' -Name 'stale'
+if (-not $stale.groups[0].entries[0].isStale -or $stale.groups[0].entries[0].staleReason -ne 'size-or-time-changed') {
+    throw 'Stale-file evidence did not normalize.'
+}
+
 $malformed = Join-Path $temp 'malformed.json'
 '{ not valid json' | Set-Content -Path $malformed -Encoding UTF8
 try {

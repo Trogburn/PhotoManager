@@ -1,0 +1,16 @@
+[
+  {
+    "groupId": "stale-001",
+    "kind": "duplicate",
+    "entries": [
+      {
+        "path": "\\\\server\\photos\\changed.jpg",
+        "size": 256,
+        "modifiedTime": "2024-05-01T09:00:00Z",
+        "hash": "old-hash",
+        "stale": true,
+        "staleReason": "size-or-time-changed"
+      }
+    ]
+  }
+]

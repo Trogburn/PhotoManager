@@ -7,7 +7,7 @@
   "czkawkaVersion": "12.0.1",
   "scanRoot": "\\\\NAS\\Photos",
   "scanTimestampUtc": "2026-09-08T00:00:00Z",
-  "generatedAtUtc": "2026-09-08T06:58:43.9617961Z",
+  "generatedAtUtc": "2026-09-08T07:02:49.5481643Z",
   "groupCount": 2,
   "groups": [
     {
@@ -28,7 +28,12 @@
           "sourceScan": "image",
           "groupId": "group-0",
           "isReference": false,
-          "referenceState": "not-set"
+          "referenceState": "not-set",
+          "warning": null,
+          "accessState": "accessible",
+          "error": null,
+          "isStale": false,
+          "staleReason": null
         }
       ]
     },
@@ -50,7 +55,12 @@
           "sourceScan": "image",
           "groupId": "group-1",
           "isReference": false,
-          "referenceState": "not-set"
+          "referenceState": "not-set",
+          "warning": null,
+          "accessState": "accessible",
+          "error": null,
+          "isStale": false,
+          "staleReason": null
         }
       ]
     }

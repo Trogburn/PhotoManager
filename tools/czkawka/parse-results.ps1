@@ -95,6 +95,11 @@ function New-NormalizedEntry {
         groupId = $GroupId
         isReference = if ($Entry.PSObject.Properties.Name -contains 'isReference') { [bool]$Entry.isReference } else { $false }
         referenceState = if ($Entry.PSObject.Properties.Name -contains 'referenceState') { [string]$Entry.referenceState } else { 'not-set' }
+        warning = if (Test-Property -Value $Entry -Name 'warning') { [string]$Entry.warning } else { $null }
+        accessState = if (Test-Property -Value $Entry -Name 'access') { [string]$Entry.access } else { 'accessible' }
+        error = if (Test-Property -Value $Entry -Name 'error') { [string]$Entry.error } else { $null }
+        isStale = if (Test-Property -Value $Entry -Name 'stale') { [bool]$Entry.stale } else { $false }
+        staleReason = if (Test-Property -Value $Entry -Name 'staleReason') { [string]$Entry.staleReason } else { $null }
     }
 }
 
@@ -122,6 +127,7 @@ switch ($Mode) {
                 groupId = $groupId
                 kind = if (Test-Property -Value $group -Name 'kind') { [string]$group.kind } else { 'unknown' }
                 isReference = if (Test-Property -Value $group -Name 'isReference') { [bool]$group.isReference } else { $false }
+                warnings = if (Test-Property -Value $group -Name 'warnings') { @($group.warnings) } else { @() }
                 entries = $entries
             }
             $groupIndex++
