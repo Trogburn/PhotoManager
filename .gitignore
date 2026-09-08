@@ -1,0 +1,9 @@
+# Local runtime artifacts
+reports/
+**/reports/
+**/*.local.json
+**/*.log
+**/*.tmp
+
+# Tooling runtime files
+tools/czkawka/config.local.json
