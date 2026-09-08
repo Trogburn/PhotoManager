@@ -16,6 +16,7 @@ This repository now includes a pinned Windows installation and read-only scan wo
 - `tools/czkawka/tests/phase3-smoke.ps1` and `tools/czkawka/tests/phase3-tests.ps1` - Validate Phase 3 evidence, dry-run, approval, and undo behavior.
 - `tools/czkawka/classify-results.ps1` - Merges overlapping normalized findings into explainable, advisory review groups with confidence tiers and keep suggestions.
 - `tools/czkawka/tests/phase4-tests.ps1` - Validates deterministic grouping, confidence tiers, labels, evidence retention, and protected-reference behavior.
+- `tools/czkawka/review.ps1` - Native Windows reviewer for one classified group at a time, with previews, persisted decisions, and static HTML export.
 - `.gitignore` - Keeps generated reports and local config artifacts out of source control.
 
 ### Commands
@@ -35,6 +36,9 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phas
 
 # Classify normalized findings without changing files
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\classify-results.ps1 -InputPath .\reports\czkawka\normalized.json
+
+# Open the native reviewer; Phase 5 records decisions but does not move files
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\review.ps1 -InputPath .\reports\czkawka\normalized.classified.json -DateReviewPath .\reports\dates\date-review.json
 
 # Inspect date evidence without changing files
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dates.ps1 -Path "\\server\photos" -Recurse

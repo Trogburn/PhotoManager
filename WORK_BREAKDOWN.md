@@ -6,7 +6,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 57%**
+**Overall implementation: 69%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
@@ -14,7 +14,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 | 2 | Stable local result model | Complete | 100% | Phase 1 |
 | 3 | Metadata date repair utility | Complete | 100% | Phase 2 |
 | 4 | Confidence and human grouping | Complete | 100% | Phases 2-3 |
-| 5 | Native Windows review experience | Not started | 0% | Phase 4 |
+| 5 | Native Windows review experience | In progress | 85% | Phase 4 |
 | 6 | Safe remediation and undo | Not started | 0% | Phase 5 |
 | 7 | Operational polish | Not started | 0% | Phase 6 |
 
@@ -197,11 +197,11 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - UNC paths can be opened from the interface.
 - Unavailable or inaccessible files are clearly marked.
 
-**Status:** Not started, 0%
+**Status:** In progress, 85%
 
 **Agent update log:**
 
-- No work recorded.
+- 2026-09-08: Added `review.ps1` with native WinForms group review, side-by-side preview fallback, evidence/date details, persisted keep/protect/defer/quarantine-request decisions, explicit quarantine confirmation, and static HTML export. PowerShell syntax and export-only validation passed. Manual desktop/UNC acceptance checks remain.
 
 ## Phase 6: Safe Remediation and Undo
 
