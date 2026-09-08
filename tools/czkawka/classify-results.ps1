@@ -44,6 +44,7 @@ function Get-NameQuality {
     if ($name -match '\d{4}[-_]\d{2}[-_]\d{2}') { $score += 2 }
     if ($name -notmatch '^(copy|img|image|dsc|pxl)[-_]?\d*$') { $score++ }
     if ($name.Length -ge 4) { $score++ }
+    if ($name -match '\s*\(\d+\)$') { $score -= 3 }
     return $score
 }
 
@@ -153,7 +154,7 @@ if ($paths.Count -gt 0) {
             }
             suggestedKeepPath = $suggestedPath
             recommendationReason = $reason
-            items = @($componentItems | Sort-Object path | ForEach-Object {
+            items = @($componentItems | Sort-Object @{ Expression = { if ($_.path -eq $suggestedPath) { 0 } else { 1 } } }, path | ForEach-Object {
                 [ordered]@{
                     path = $_.path
                     size = $_.size

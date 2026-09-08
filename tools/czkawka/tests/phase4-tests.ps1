@@ -46,6 +46,14 @@ try {
         throw 'Weak visual match was not assigned Review carefully.'
     }
 
+    $baseName = @($exact.items | Where-Object path -like '*2024-01-01-original.jpg')[0]
+    if ($exact.suggestedKeepPath -ne $baseName.path) {
+        throw 'Filename quality did not prefer the unsuffixed/base-quality name.'
+    }
+    if ($exact.items[0].path -ne $exact.suggestedKeepPath) {
+        throw 'Suggested keep was not placed in the left-most item position.'
+    }
+
     Write-Host 'Phase 4 classifier tests passed.'
 }
 finally {

@@ -6,7 +6,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 69%**
+**Overall implementation: 71%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
@@ -14,7 +14,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 | 2 | Stable local result model | Complete | 100% | Phase 1 |
 | 3 | Metadata date repair utility | Complete | 100% | Phase 2 |
 | 4 | Confidence and human grouping | Complete | 100% | Phases 2-3 |
-| 5 | Native Windows review experience | In progress | 85% | Phase 4 |
+| 5 | Native Windows review experience | Complete | 100% | Phase 4 |
 | 6 | Safe remediation and undo | Not started | 0% | Phase 5 |
 | 7 | Operational polish | Not started | 0% | Phase 6 |
 
@@ -172,6 +172,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 **Agent update log:**
 
 - 2026-09-08: Added deterministic classifier grouping with transitive exact/image evidence, four confidence tiers, explainable labels, protected/reference safeguards, configurable advisory keep recommendations, and no-action output. Phase 4 tests passed under PowerShell 7.6.5.
+- 2026-09-08: Penalized numbered filename suffixes such as `(2)` and `(3)` so unsuffixed base names win deterministic tie-breaks when content and dimensions match. Phase 4 regression tests passed; the real `100_0095` group now recommends `100_0095.JPG`.
 
 ## Phase 5: Native Windows Review Experience
 
@@ -197,11 +198,11 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - UNC paths can be opened from the interface.
 - Unavailable or inaccessible files are clearly marked.
 
-**Status:** In progress, 85%
+**Status:** Complete, 100%
 
 **Agent update log:**
 
-- 2026-09-08: Added `review.ps1` with native WinForms group review, side-by-side preview fallback, evidence/date details, persisted keep/protect/defer/quarantine-request decisions, explicit quarantine confirmation, and static HTML export. PowerShell syntax and export-only validation passed. Manual desktop/UNC acceptance checks remain.
+- 2026-09-08: Completed `review.ps1` with native WinForms group review, side-by-side preview fallback, evidence/date details, persisted keep/protect/defer/quarantine-request decisions, explicit quarantine confirmation, and static HTML export. Manual acceptance passed for multi-step navigation, per-group defer persistence, direct and unavailable preview selection, keep-suggestion ordering/highlighting, protection toggling, quarantine confirmation, report export, and a read-only review of the real `Z:` share photos. PowerShell syntax and export-only validation also passed with real local JPEG and mapped-share fixtures.
 
 ## Phase 6: Safe Remediation and Undo
 
