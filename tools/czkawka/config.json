@@ -5,13 +5,13 @@
     "version": "12.0.1",
     "downloadUrl": "https://github.com/qarmin/czkawka/releases/download/12.0.1/windows_czkawka_cli_x86_64.zip",
     "checksum": "REPLACE_WITH_PUBLISHED_SHA256",
-    "installDirectory": "C:\\Tools\\czkawka",
-    "exePath": "C:\\Tools\\czkawka\\czkawka_cli.exe",
+    "installDirectory": ".\\tools\\czkawka\\bin",
+    "exePath": ".\\tools\\czkawka\\bin\\czkawka_cli.exe",
     "allowUpdate": false
   },
   "scan": {
-    "uncRoot": "\\\\NAS\\Photos",
-    "localReportRoot": "C:\\Reports\\czkawka",
+    "uncRoot": "\\\\YOUR-SERVER\\YOUR-SHARE\\Photos",
+    "localReportRoot": ".\\reports\\czkawka",
     "mode": "read-only",
     "fresh": false,
     "duplicate": {
@@ -31,13 +31,12 @@
       "excludePaths": []
     },
     "protectedPaths": [
-      "C:\\Users\\Public\\Pictures",
-      "\\\\NAS\\Reference"
+      "\\\\YOUR-SERVER\\YOUR-SHARE\\Reference"
     ],
     "excludedPaths": [],
     "preferredDirectories": [
-      "\\\\NAS\\Photos\\Keep",
-      "\\\\NAS\\Photos\\Archive"
+      "\\\\YOUR-SERVER\\YOUR-SHARE\\Photos\\Keep",
+      "\\\\YOUR-SERVER\\YOUR-SHARE\\Photos\\Archive"
     ],
     "allowedExitCodes": [
       0,
