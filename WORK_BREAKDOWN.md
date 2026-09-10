@@ -79,6 +79,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - 2026-09-08: Replaced machine-specific-looking defaults with repository-relative installer/report paths and explicit `YOUR-SERVER`/`YOUR-SHARE` UNC placeholders. Configuration JSON, PowerShell syntax, and Phase 2 regression tests passed.
 - 2026-09-08: Audit correction: live CLI installation, actual version capture, separated diagnostics, local/UNC scan fixtures, and finding/invalid-argument checks remain unverified. The configured checksum is still a placeholder.
 - 2026-09-09: Pinned `windows_czkawka_cli.exe` 12.0.1 with the published SHA256, captured CLI `--version` plus separate stdout/stderr/JSON artifacts, and used the real Czkawka flags (`-C <file>`, `--search-method`, `--max-difference`, `--hash-alg`). `tools/czkawka/tests/phase1-tests.ps1` passed: syntax, missing executable, missing share, invalid argument, local fixture scan without file changes, finding exit handling, and a UNC round-trip via `\\localhost\C$`. Instantiated CLI reported `czkawka 12.0.1`.
+- 2026-09-10: Confirmed a read-only production UNC scan against a small mapped photo subset on the network share. Local reports/diagnostics were written; sampled source hashes and timestamps were unchanged. Large photo trees were intentionally not scanned.
 
 ## Phase 2: Stable Local Result Model
 
@@ -289,3 +290,4 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - 2026-09-08: Created the execution breakdown. Initial baseline was 0% before implementation began.
 - 2026-09-08: Moved the canonical agent instructions to `.github/copilot-instructions.md`; phase percentages remain unchanged.
 - 2026-09-09: Completed Phases 1-3 (CLI install/scan capture, upstream JSON normalization, timezone-aware date repair). Overall progress is 80%.
+- 2026-09-10: Recorded read-only production UNC validation on a small photo subset; large trees left unscanned.
