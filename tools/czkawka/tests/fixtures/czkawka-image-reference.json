@@ -1,0 +1,24 @@
+[
+  [
+    {
+      "path": "\\\\NAS\\Reference\\original.jpg",
+      "size": 2048,
+      "width": 1920,
+      "height": 1080,
+      "modified_date": 1700000200,
+      "hashes": [1, 2, 3, 4],
+      "difference": 0
+    },
+    [
+      {
+        "path": "\\\\NAS\\Photos\\Incoming\\copy.jpg",
+        "size": 1024,
+        "width": 1280,
+        "height": 720,
+        "modified_date": 1700000200,
+        "hashes": [1, 2, 3, 5],
+        "difference": 3
+      }
+    ]
+  ]
+]

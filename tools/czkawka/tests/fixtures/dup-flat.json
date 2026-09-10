@@ -1,0 +1,14 @@
+[
+  {
+    "path": "\\\\server\\photos\\a.jpg",
+    "size": 512,
+    "modifiedTime": "2024-03-01T12:00:00Z",
+    "hash": "hash-a"
+  },
+  {
+    "path": "\\\\server\\photos\\b.jpg",
+    "size": 512,
+    "modifiedTime": "2024-03-01T12:00:00Z",
+    "hash": "hash-a"
+  }
+]

@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "version": "2026-09-09",
+  "czkawka": {
+    "version": "12.0.1",
+    "downloadUrl": "https://github.com/qarmin/czkawka/releases/download/12.0.1/windows_czkawka_cli.exe",
+    "checksum": "433b96ceb2a9c58882342ac866ff9edaa928d11d031dfe41dfdeada5552f8ca1",
+    "installDirectory": ".\\tools\\czkawka\\bin",
+    "exePath": ".\\tools\\czkawka\\bin\\czkawka_cli.exe",
+    "allowUpdate": false
+  },
+  "scan": {
+    "uncRoot": "\\\\YOUR-SERVER\\YOUR-SHARE\\Photos",
+    "localReportRoot": ".\\reports\\czkawka",
+    "quarantineRoot": ".\\reports\\quarantine",
+    "mode": "read-only",
+    "fresh": false,
+    "duplicate": {
+      "command": "dup",
+      "subMode": "hash",
+      "hashSize": 16,
+      "minimalFileSize": 1,
+      "includeReferenceFolders": false,
+      "excludePaths": []
+    },
+    "image": {
+      "command": "image",
+      "threshold": 8,
+      "algorithm": "Gradient",
+      "geometricInvariance": false,
+      "hashSize": 16,
+      "minimalFileSize": 1,
+      "includeReferenceFolders": false,
+      "excludePaths": []
+    },
+    "protectedPaths": [
+      "\\\\YOUR-SERVER\\YOUR-SHARE\\Reference"
+    ],
+    "excludedPaths": [],
+    "preferredDirectories": [
+      "\\\\YOUR-SERVER\\YOUR-SHARE\\Photos\\Keep",
+      "\\\\YOUR-SERVER\\YOUR-SHARE\\Photos\\Archive"
+    ],
+    "allowedExitCodes": [
+      0,
+      11
+    ]
+  }
+}

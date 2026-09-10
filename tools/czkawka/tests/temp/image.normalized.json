@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "source": "czkawka",
+  "inputPath": "C:\\dev\\GitHub\\QnapServerManagement\\tools\\czkawka\\tests\\fixtures\\image-group.json",
+  "rawArtifactPath": "C:\\dev\\GitHub\\QnapServerManagement\\tools\\czkawka\\tests\\fixtures\\image-group.json",
+  "sourceScan": "image",
+  "czkawkaVersion": "12.0.1",
+  "scanRoot": "\\\\NAS\\Photos",
+  "scanTimestampUtc": "2026-09-08T00:00:00Z",
+  "generatedAtUtc": "2026-09-08T08:02:57.7384860Z",
+  "groupCount": 1,
+  "groups": [
+    {
+      "schemaVersion": 1,
+      "source": "czkawka",
+      "groupId": "image-001",
+      "kind": "similar-image",
+      "isReference": true,
+      "warnings": null,
+      "entries": [
+        {
+          "path": "\\\\NAS\\Photos\\Reference\\original.jpg",
+          "size": 2048,
+          "modifiedTime": "2024-02-01T10:00:00Z",
+          "hash": null,
+          "width": 1920,
+          "height": 1080,
+          "perceptualDifference": 3.5,
+          "sourceScan": "image",
+          "groupId": "image-001",
+          "isReference": true,
+          "referenceState": "reference",
+          "warning": null,
+          "accessState": "accessible",
+          "error": null,
+          "isStale": false,
+          "staleReason": null
+        },
+        {
+          "path": "\\\\NAS\\Photos\\Incoming\\copy.jpg",
+          "size": 1024,
+          "modifiedTime": "2024-02-01T10:00:00Z",
+          "hash": null,
+          "width": 1280,
+          "height": 720,
+          "perceptualDifference": 3.5,
+          "sourceScan": "image",
+          "groupId": "image-001",
+          "isReference": false,
+          "referenceState": "candidate",
+          "warning": null,
+          "accessState": "accessible",
+          "error": null,
+          "isStale": false,
+          "staleReason": null
+        }
+      ]
+    }
+  ]
+}
