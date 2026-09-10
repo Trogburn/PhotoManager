@@ -6,7 +6,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 86%**
+**Overall implementation: 91%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
@@ -15,7 +15,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 | 3 | Metadata date repair utility | Complete | 100% | Phase 2 |
 | 4 | Confidence and human grouping | Complete | 100% | Phases 2-3 |
 | 5 | Native Windows review experience | Complete | 100% | Phase 4 |
-| 6 | Safe remediation and undo | In progress | 60% | Phase 5 |
+| 6 | Safe remediation and undo | Complete | 100% | Phase 5 |
 | 7 | Operational polish | In progress | 40% | Phase 6 |
 
 ### Status Definitions
@@ -225,9 +225,9 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - [x] Use quarantine rather than direct deletion.
 - [x] Make quarantine location configurable; test a dedicated folder on the same share first.
 - [x] Preserve relative source paths and use collision-safe destination names.
-- [ ] Revalidate existence, size, modified time, and hash where available before moving.
+- [x] Revalidate existence, size, modified time, and comparable SHA-256 hash evidence before moving.
 - [x] Refuse stale or changed entries.
-- [x] Write an append-only transaction manifest.
+- [x] Write an append-only transaction manifest with pre-move and post-move evidence.
 - [x] Add an undo command that will not overwrite newer files.
 - [x] Add dry-run mode, protected paths, excluded paths, and summaries of moved/skipped/failed files.
 - [x] Keep Czkawka deletion flags out of the workflow.
@@ -242,12 +242,13 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - Protected files cannot be moved.
 - Undo restores a quarantined file without overwriting a newer destination.
 
-**Status:** In progress, 60%
+**Status:** Complete, 100%
 
 **Agent update log:**
 
 - 2026-09-08: Added `remediate.ps1` with dry-run-first quarantine, explicit decision filtering, protected/reference and excluded-path refusal, size/mtime stale checks, collision-safe destinations, append-only transaction logging, and guarded undo. Temporary-file acceptance tests passed for dry-run, approved move, protection, stale refusal, collisions, logging, and undo under PowerShell 7.6.5. Remaining verification/implementation gaps: hash revalidation where comparable evidence exists, a real same-share quarantine test, and a permission-denied move test. Czkawka deletion flags remain unused.
 - 2026-09-08: Audit correction: excluded-path tests, complete transaction evidence, and the same-share quarantine-location decision also remain incomplete.
+- 2026-09-10: Completed Phase 6 remediation verification. Comparable 64-hex SHA-256 classifier hashes are revalidated before moving; append-only entries now retain explicit pre-move and post-move size, mtime, and SHA-256 evidence; tests cover excluded paths, same-share quarantine, collision-safe destinations, stale/hash refusal, ACL permission-denied moves, and guarded undo. Phase 6 tests and PowerShell syntax checks passed under PowerShell 7.6.5. No Czkawka deletion flags are used.
 
 ## Phase 7: Operational Polish
 
