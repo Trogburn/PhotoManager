@@ -80,7 +80,7 @@ This command:
 - Normalizes both result files.
 - Combines and classifies the findings.
 - Opens the native reviewer.
-- Writes decisions and an HTML report inside the new scan report folder.
+- Writes decisions plus searchable HTML and JSON reports inside the new scan report folder.
 
 To bypass the Czkawka cache:
 

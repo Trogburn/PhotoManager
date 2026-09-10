@@ -86,7 +86,7 @@ Build a low-maintenance Windows workflow around the unchanged Czkawka CLI. The C
 3. Run the same scans against a UNC path with read-only permissions and confirm paths round-trip unchanged.
 4. Run date repair in dry-run against timestamp fixtures; verify EXIF precedence, filename parsing, timezone handling, conflict refusal, proposed Explorer timestamps, and undo data.
 5. Open the native reviewer and manually process exact duplicates, different-name same-content files, resized copies, thumbnails, ambiguous matches, and date-repair proposals.
-6. Execute remediation in dry-run, then quarantine a test group and apply an approved timestamp change; verify stale-file protection, transaction logs, and undo for both operations.
+6. Execute remediation in dry-run, then quarantine a test group and apply an approved timestamp change; verify stale-file protection, transaction logs, and undo for both operations. Automated tests cover a same-volume temporary quarantine; validate the configured network-share quarantine location separately before production use.
 7. Run PowerShell syntax checks and all local parser/classifier/date-repair tests before any Task Scheduler integration.
 
 ## Decisions
@@ -103,7 +103,7 @@ Build a low-maintenance Windows workflow around the unchanged Czkawka CLI. The C
 
 ## Further Considerations
 
-1. Decide where quarantine should live before Phase 6: same share preserves capacity and avoids copying large files, while local quarantine simplifies recovery but requires enough local storage. Recommendation: configurable, default to a dedicated folder on the same share after testing.
+1. Decide where quarantine should live before production use: same share preserves capacity and avoids copying large files, while local quarantine simplifies recovery but requires enough local storage. Keep it configurable; automated tests use a same-volume temporary folder, while the configured production network-share location still requires environment-specific validation.
 2. Decide whether thumbnails/originals should be protected by path rules or by the classifier. Recommendation: support both, with protected paths taking precedence.
 3. Pin a tested Czkawka release and store a checksum; do not track `master` for production scans.
 4. Decide whether the album policy should change CreationTime only or both CreationTime and LastWriteTime. Recommendation: CreationTime only by default, because LastWriteTime describes file content/transfer state and should not be rewritten silently.
