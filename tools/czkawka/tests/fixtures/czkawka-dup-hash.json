@@ -1,0 +1,18 @@
+{
+  "956": [
+    [
+      {
+        "path": "\\\\NAS\\Photos\\incoming\\original-copy.jpg",
+        "modified_date": 1700000000,
+        "size": 956,
+        "hash": "d6ddf9df546a5209d79e47f1de940051e1fbda19422841b90f913ef45340ce58"
+      },
+      {
+        "path": "\\\\NAS\\Photos\\incoming\\original.jpg",
+        "modified_date": 1700000000,
+        "size": 956,
+        "hash": "d6ddf9df546a5209d79e47f1de940051e1fbda19422841b90f913ef45340ce58"
+      }
+    ]
+  ]
+}

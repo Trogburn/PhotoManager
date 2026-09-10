@@ -26,18 +26,24 @@ This repository now includes a pinned Windows installation and read-only scan wo
 
 ### Commands
 ```powershell
-# Install the pinned CLI
-powershell -ExecutionPolicy Bypass -File .\tools\czkawka\install.ps1 -Version 12.0.1 -Checksum "<sha256>"
+# Install the pinned CLI using the checksum in tools/czkawka/config.json
+powershell -ExecutionPolicy Bypass -File .\tools\czkawka\install.ps1
 
 # Run a read-only scan against a UNC root
 powershell -ExecutionPolicy Bypass -File .\tools\czkawka\scan.ps1 -ScanRoot "\\server\photos"
 
-# Force re-download and replace an existing install
-powershell -ExecutionPolicy Bypass -File .\tools\czkawka\install.ps1 -Version 12.0.1 -Checksum "<sha256>" -Force
+# Run the same scans against a local fixture directory
+powershell -ExecutionPolicy Bypass -File .\tools\czkawka\scan.ps1 -ScanRoot .\fixtures\photos -AllowLocalRoot
 
-# Validate the Phase 2 result normalizer with PowerShell 7
+# Force re-download and replace an existing install
+powershell -ExecutionPolicy Bypass -File .\tools\czkawka\install.ps1 -Force
+
+# Validate Phase 1-3 with PowerShell 7
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase1-tests.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase2-smoke.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase2-tests.ps1
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase3-smoke.ps1
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase3-tests.ps1
 
 # Classify normalized findings without changing files
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\classify-results.ps1 -InputPath .\reports\czkawka\normalized.json
@@ -50,6 +56,7 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dat
 
 # Apply a reviewed report using explicit decisions, then undo if needed
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dates.ps1 -ReviewPath .\reports\dates\date-review.json -DecisionPath .\reports\dates\decisions.json -Apply
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dates.ps1 -Path "\\server\photos" -Recurse -Apply -ApproveHighConfidence
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dates.ps1 -Undo -UndoManifestPath .\reports\dates\date-undo.jsonl
 
 # Preview quarantine actions without moving files
@@ -61,17 +68,17 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\remediate.
 ```
 
 ### Configuration
-The checked-in `tools/czkawka/config.json` uses repository-relative local paths and obvious `YOUR-SERVER`/`YOUR-SHARE` UNC placeholders. Replace those UNC values with the actual share and protected/preferred folders before scanning. The local executable is installed under `tools/czkawka/bin`, and reports are written under `reports/czkawka`.
+The checked-in `tools/czkawka/config.json` uses repository-relative local paths and obvious `YOUR-SERVER`/`YOUR-SHARE` UNC placeholders. Replace those UNC values with the actual share and protected/preferred folders before scanning. The local executable is installed under `tools/czkawka/bin`, and reports are written under `reports/czkawka`. The Czkawka 12.0.1 Windows CLI URL and SHA256 checksum are pinned in that config; `install.ps1` reads them by default.
 
 ### Safety notes
-- The scan workflow rejects non-UNC roots and missing shares before launching Czkawka.
-- Raw scan output and metadata are written under the local reports directory so results remain local and reviewable.
-- Exit codes `0` and `11` are treated as successful scan outcomes; other exit codes fail early.
+- Production scans should use a UNC root. Local directories are allowed only with `-AllowLocalRoot` for fixture validation. Missing executables, missing shares, and invalid Czkawka arguments fail before files are changed.
+- Each scan writes compact JSON under `raw/`, stderr diagnostics under `diagnostics/`, and command metadata (including the actual `czkawka_cli --version`) under `metadata/`.
+- Exit codes `0` and `11` are treated as successful scan outcomes; other exit codes fail early. Deletion flags are never passed to Czkawka.
 - Cache is retained by default; the `-Fresh` switch maps to Czkawka's `-H` option for a cache bypass when needed.
-- The Phase 2 normalizer emits schema version `1`, preserving source scan, group membership, file metadata, reference state, and the raw input artifact path.
+- The Phase 2 normalizer accepts both the stable local schema and captured Czkawka 12 HASH/image JSON. It emits schema version `1`, preserving source scan, group membership, file metadata, reference state, raw artifact paths, CLI version, scan root, and scan timestamp. `parse-results.ps1 -ScanReportDir` combines `dup` and `image` outputs from one scan folder.
 - The normalizer retains warning, inaccessible-file, and stale-file evidence for later human review; it does not delete or alter files.
-- Date repair is dry-run by default. EXIF evidence takes precedence over filename evidence; folder dates are low-confidence, sidecars are excluded, and invalid, conflicting, or future dates are not applied automatically.
-- Timestamp changes require `-Apply`; the default policy changes CreationTime only, records an append-only undo manifest, and supports `-Undo`.
+- Date repair is dry-run by default. EXIF `DateTimeOriginal` outranks digitized date, then filename, then folder names. Sidecars are excluded. Naive timestamps are unspecified local time; explicit offsets convert to UTC. Invalid, ambiguous, conflicting, mixed-timezone, or future dates are not applied automatically.
+- Timestamp changes require `-Apply` plus an explicit approve path, decision file, or `-ApproveHighConfidence` for high-confidence EXIF items. The default policy changes CreationTime only, records an append-only undo manifest, and supports `-Undo`.
 - Saved reports are revalidated for file size and LastWriteTime before changes. Decision files support `skip`, `protect`, `approve`, and `manual` actions; manual decisions must include a `date` value.
 - Classification is advisory only. It retains original evidence edges, marks protected/reference items, and never deletes, moves, or changes timestamps.
 - Remediation is quarantine-only and dry-run by default. It revalidates size and modified time, refuses stale/protected/excluded files, uses collision-safe destinations, appends transactions, and never enables Czkawka deletion flags.

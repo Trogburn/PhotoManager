@@ -6,16 +6,16 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 89%**
+**Overall implementation: 80%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
 | 1 | Czkawka CLI foundation | Complete | 100% | None |
 | 2 | Stable local result model | Complete | 100% | Phase 1 |
 | 3 | Metadata date repair utility | Complete | 100% | Phase 2 |
-| 4 | Confidence and human grouping | Complete | 100% | Phases 2-3 |
-| 5 | Native Windows review experience | Complete | 100% | Phase 4 |
-| 6 | Safe remediation and undo | In progress | 85% | Phase 5 |
+| 4 | Confidence and human grouping | In progress | 75% | Phases 2-3 |
+| 5 | Native Windows review experience | In progress | 85% | Phase 4 |
+| 6 | Safe remediation and undo | In progress | 60% | Phase 5 |
 | 7 | Operational polish | In progress | 40% | Phase 6 |
 
 ### Status Definitions
@@ -57,7 +57,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - [x] Add `tools/czkawka/scan.ps1`.
 - [x] Validate the UNC path before launching Czkawka.
 - [x] Run `dup -s hash` and `image` separately in read-only mode.
-- [x] Capture raw JSON, stderr/diagnostics, command metadata, version, timestamps, and exit status.
+- [x] Capture raw JSON, separate stderr/diagnostics, command metadata, actual CLI version, timestamps, and exit status.
 - [x] Treat exit codes `0` and `11` as successful scan outcomes; fail on process, argument, or path errors.
 - [x] Support `-Fresh` by passing `-H`; retain cache by default.
 - [x] Keep reports local by default and exclude runtime reports from source control.
@@ -77,6 +77,8 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 - 2026-09-08: Added the pinned install script, local config, read-only scan wrapper, and local artifact storage. Validated script syntax with a PowerShell parser check; both scripts parsed successfully.
 - 2026-09-08: Replaced machine-specific-looking defaults with repository-relative installer/report paths and explicit `YOUR-SERVER`/`YOUR-SHARE` UNC placeholders. Configuration JSON, PowerShell syntax, and Phase 2 regression tests passed.
+- 2026-09-08: Audit correction: live CLI installation, actual version capture, separated diagnostics, local/UNC scan fixtures, and finding/invalid-argument checks remain unverified. The configured checksum is still a placeholder.
+- 2026-09-09: Pinned `windows_czkawka_cli.exe` 12.0.1 with the published SHA256, captured CLI `--version` plus separate stdout/stderr/JSON artifacts, and used the real Czkawka flags (`-C <file>`, `--search-method`, `--max-difference`, `--hash-alg`). `tools/czkawka/tests/phase1-tests.ps1` passed: syntax, missing executable, missing share, invalid argument, local fixture scan without file changes, finding exit handling, and a UNC round-trip via `\\localhost\C$`. Instantiated CLI reported `czkawka 12.0.1`.
 
 ## Phase 2: Stable Local Result Model
 
@@ -88,7 +90,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - [x] Parse `dup` HASH output, including empty and reference-directory variants.
 - [x] Parse grouped `image` output, including reference-directory variants.
 - [x] Emit a versioned normalized result document.
-- [x] Preserve source scan, Czkawka version, raw artifact paths, scan root, and scan timestamp.
+- [x] Preserve source scan, Czkawka version, raw artifact paths, scan root, and scan timestamp through the combined workflow.
 - [x] Capture path, size, modified time, hash, width, height, perceptual difference, reference state, and group membership.
 - [x] Add fixtures for valid results, empty results, malformed JSON, warnings, inaccessible files, and stale files.
 - [x] Add deterministic parser tests.
@@ -106,6 +108,8 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 **Agent update log:**
 
 - 2026-09-08: Completed deterministic normalization for grouped and flat results, duplicate/image reference variants, empty results, warnings, inaccessible files, stale entries, metadata propagation, and actionable shape errors. PowerShell 7.6.5 smoke, fixture, and syntax checks passed.
+- 2026-09-08: Audit correction: fixtures are synthetic schema-shaped inputs rather than captured upstream Czkawka outputs; combined-workflow metadata/raw preservation and byte-for-byte determinism remain incomplete.
+- 2026-09-09: Parser now accepts captured Czkawka 12.0.1 HASH objects and similar-image arrays, including reference-directory pairs, unix `modified_date`, and byte `hashes`. `-ScanReportDir` combines dup/image artifacts while preserving CLI version, scan root, timestamps, and raw paths. `phase2-tests.ps1` passed with byte-for-byte determinism when `GeneratedAtUtc` is fixed.
 
 ## Phase 3: Metadata Date Repair Utility
 
@@ -119,7 +123,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - [x] Keep video/container metadata and sidecars out of the first implementation unless a tested built-in or approved dependency is available.
 - [x] Treat folder names as lower-confidence evidence only.
 - [x] Treat current filesystem CreationTime and LastWriteTime as transfer/copy evidence, not capture time.
-- [x] Normalize timezone handling and reject conflicts, ambiguous dates, impossible dates, and unacceptable future dates.
+- [x] Normalize timezone handling with an explicit policy and reject conflicts, ambiguous dates, impossible dates, and unacceptable future dates.
 - [x] Produce a dry-run report with current timestamps, proposed date, source evidence, confidence, and parsed token.
 - [x] Add actions for accept one, accept high-confidence batch, skip, protect, and manual override.
 - [x] Revalidate path, size, and timestamp before applying changes.
@@ -143,6 +147,8 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 **Agent update log:**
 
 - 2026-09-08: Completed `repair-dates.ps1` with dry-run date evidence, EXIF/filename/folder precedence, invalid and future-date rejection, explicit review actions, saved-report approval, size/mtime stale revalidation, CreationTime-only policy, append-only undo, and safe restoration. Phase 3 tests cover generated EXIF precedence/conflict, folder and filename evidence, sidecars, future/impossible dates, dry-run, approval, stale refusal, and undo under PowerShell 7.6.5.
+- 2026-09-08: Audit correction: timezone policy/fixtures, digitized-date fallback, camera-style/copy/inaccessible/ambiguous cases, and direct batch-approval coverage remain incomplete.
+- 2026-09-09: Added an explicit timezone policy (naive timestamps are unspecified local time; offsets convert to UTC; mixed kinds and disagreeing instants conflict), digitized-date fallback, calendar/ambiguous rejection, locked-file inaccessibility, and `-ApproveHighConfidence` batch apply. `phase3-tests.ps1` and `phase3-smoke.ps1` passed, including timezone offsets, camera names, copied files, sidecars, inaccessible files, and impossible dates.
 
 ## Phase 4: Confidence and Human-Oriented Grouping
 
@@ -167,12 +173,13 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - Protected/reference paths cannot be recommended for removal.
 - Classifier output is stable for the same normalized input.
 
-**Status:** Complete, 100%
+**Status:** In progress, 75%
 
 **Agent update log:**
 
 - 2026-09-08: Added deterministic classifier grouping with transitive exact/image evidence, four confidence tiers, explainable labels, protected/reference safeguards, configurable advisory keep recommendations, and no-action output. Phase 4 tests passed under PowerShell 7.6.5.
 - 2026-09-08: Penalized numbered filename suffixes such as `(2)` and `(3)` so unsuffixed base names win deterministic tie-breaks when content and dimensions match. Phase 4 regression tests passed; the real `100_0095` group now recommends `100_0095.JPG`.
+- 2026-09-08: Audit correction: hash-driven confidence, label boundary behavior, complete evidence retention, and broader threshold/path test matrices remain incomplete.
 
 ## Phase 5: Native Windows Review Experience
 
@@ -182,11 +189,11 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 - [x] Add `tools/czkawka/review.ps1` using a small native PowerShell/.NET GUI.
 - [x] Display side-by-side image previews with graceful handling for unavailable images.
-- [x] Show confidence tier, explanation, evidence, path, filename, dimensions, size, modified time, proposed date, and suggested keep.
+- [ ] Show confidence tier, explanation, complete evidence, path, filename, dimensions, size, modified time, proposed date, and suggested keep.
 - [x] Add quick actions: keep suggestion, choose another keep, quarantine selected, skip/defer, open file, open folder, and protect.
 - [x] Include date-repair proposals in the same review workflow or provide a clear linked review screen.
 - [x] Require explicit confirmation for every quarantine or timestamp change.
-- [x] Generate static HTML/JSON reports for search and archival, while keeping filesystem actions native.
+- [ ] Generate static HTML/JSON reports with search support for archival, while keeping filesystem actions native.
 - [x] Track decisions so deferred groups return to the reviewer.
 
 **Acceptance checks**
@@ -198,11 +205,12 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - UNC paths can be opened from the interface.
 - Unavailable or inaccessible files are clearly marked.
 
-**Status:** Complete, 100%
+**Status:** In progress, 85%
 
 **Agent update log:**
 
 - 2026-09-08: Completed `review.ps1` with native WinForms group review, side-by-side preview fallback, evidence/date details, persisted keep/protect/defer/quarantine-request decisions, explicit quarantine confirmation, and static HTML export. Manual acceptance passed for multi-step navigation, per-group defer persistence, direct and unavailable preview selection, keep-suggestion ordering/highlighting, protection toggling, quarantine confirmation, report export, and a read-only review of the real `Z:` share photos. PowerShell syntax and export-only validation also passed with real local JPEG and mapped-share fixtures.
+- 2026-09-08: Audit correction: reviewer executable tests, complete visible evidence fields, HTML search, and reproducible UNC/inaccessible/deferred acceptance artifacts remain incomplete despite successful manual checks.
 
 ## Phase 6: Safe Remediation and Undo
 
@@ -231,11 +239,12 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - Protected files cannot be moved.
 - Undo restores a quarantined file without overwriting a newer destination.
 
-**Status:** In progress, 85%
+**Status:** In progress, 60%
 
 **Agent update log:**
 
 - 2026-09-08: Added `remediate.ps1` with dry-run-first quarantine, explicit decision filtering, protected/reference and excluded-path refusal, size/mtime stale checks, collision-safe destinations, append-only transaction logging, and guarded undo. Temporary-file acceptance tests passed for dry-run, approved move, protection, stale refusal, collisions, logging, and undo under PowerShell 7.6.5. Remaining verification/implementation gaps: hash revalidation where comparable evidence exists, a real same-share quarantine test, and a permission-denied move test. Czkawka deletion flags remain unused.
+- 2026-09-08: Audit correction: excluded-path tests, complete transaction evidence, and the same-share quarantine-location decision also remain incomplete.
 
 ## Phase 7: Operational Polish
 
@@ -277,5 +286,6 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Change Log
 
-- 2026-09-08: Created the execution breakdown. All phases are not started; overall implementation is 0%.
+- 2026-09-08: Created the execution breakdown. Initial baseline was 0% before implementation began.
 - 2026-09-08: Moved the canonical agent instructions to `.github/copilot-instructions.md`; phase percentages remain unchanged.
+- 2026-09-09: Completed Phases 1-3 (CLI install/scan capture, upstream JSON normalization, timezone-aware date repair). Overall progress is 80%.

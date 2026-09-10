@@ -7,3 +7,5 @@ reports/
 
 # Tooling runtime files
 tools/czkawka/config.local.json
+tools/czkawka/bin/
+tools/czkawka/tests/temp/

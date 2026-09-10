@@ -1,0 +1,20 @@
+{
+  "4096": [
+    [
+      {
+        "path": "\\\\NAS\\Reference\\original.jpg",
+        "modified_date": 1700000100,
+        "size": 4096,
+        "hash": "ref-hash-001"
+      },
+      [
+        {
+          "path": "\\\\NAS\\Photos\\copy.jpg",
+          "modified_date": 1700000100,
+          "size": 4096,
+          "hash": "ref-hash-001"
+        }
+      ]
+    ]
+  ]
+}

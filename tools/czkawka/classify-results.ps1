@@ -115,7 +115,9 @@ if ($paths.Count -gt 0) {
         $componentPaths = @($indexes | ForEach-Object { $paths[$_] } | Sort-Object)
         $componentItems = @($componentPaths | ForEach-Object { [pscustomobject]$itemsByPath[$_] })
         $componentEdges = @($edges | Where-Object { @($_.paths | Where-Object { $componentPaths -contains $_ }).Count -gt 0 })
-        $hasExact = @($componentEdges | Where-Object { $_.kind -eq 'duplicate' }).Count -gt 0
+        $hashes = @($componentItems | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.hash) } | ForEach-Object { [string]$_.hash } | Sort-Object -Unique)
+        $hasMatchingHash = $hashes.Count -eq 1 -and @($componentItems | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.hash) }).Count -gt 1
+        $hasExact = (@($componentEdges | Where-Object { $_.kind -eq 'duplicate' }).Count -gt 0) -or $hasMatchingHash
         $differences = @($componentItems | Where-Object { $null -ne $_.perceptualDifference } | ForEach-Object { [double]$_.perceptualDifference })
         $minimumDifference = if ($differences.Count -gt 0) { ($differences | Measure-Object -Minimum).Minimum } else { $null }
         $areas = @($componentItems | Where-Object { [double]$_.width -gt 0 -and [double]$_.height -gt 0 } | ForEach-Object { [double]$_.width * [double]$_.height })

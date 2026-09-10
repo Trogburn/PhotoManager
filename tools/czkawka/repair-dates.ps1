@@ -17,6 +17,9 @@ param(
     [switch]$Apply,
 
     [Parameter()]
+    [switch]$ApproveHighConfidence,
+
+    [Parameter()]
     [string[]]$ApprovePath,
 
     [Parameter()]
@@ -37,6 +40,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+$script:TimezonePolicy = 'Naive capture timestamps are treated as unspecified local time. Explicit offsets and Zulu timestamps are converted to UTC. Mixed timezone kinds or disagreeing UTC instants are conflicts. Impossible and ambiguous dates are rejected. Filesystem CreationTime and LastWriteTime are transfer evidence only.'
 
 function Get-PropertyValue {
     param(
@@ -60,25 +65,107 @@ function Test-FileTimeMatch {
     return [math]::Abs(($Actual.ToUniversalTime() - $expectedDate).TotalSeconds) -le 1
 }
 
+function Test-CalendarDate {
+    param(
+        [int]$Year,
+        [int]$Month,
+        [int]$Day
+    )
+
+    if ($Year -lt 1990 -or $Year -gt 2100 -or $Month -lt 1 -or $Month -gt 12 -or $Day -lt 1) {
+        return $false
+    }
+    return $Day -le [datetime]::DaysInMonth($Year, $Month)
+}
+
 function Convert-ToDateOffset {
     param(
         [string]$RawValue,
         [string]$Source
     )
 
-    $parsed = [datetimeoffset]::MinValue
-    $styles = [Globalization.DateTimeStyles]::AllowWhiteSpaces
-    if ($RawValue -match '^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}$') {
-        $styles = $styles -bor [Globalization.DateTimeStyles]::AssumeLocal
-        if (-not [datetimeoffset]::TryParseExact($RawValue, 'yyyy:MM:dd HH:mm:ss', [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$parsed)) {
-            return [pscustomobject]@{ Valid = $false; Date = $null; Error = "Invalid $Source date: $RawValue" }
-        }
-    }
-    elseif (-not [datetimeoffset]::TryParse($RawValue, [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$parsed)) {
-        return [pscustomobject]@{ Valid = $false; Date = $null; Error = "Invalid $Source date: $RawValue" }
+    $trimmed = $RawValue.Trim()
+    if ($trimmed -match '^(?<month>0?[1-9]|1[0-2])[-/.](?<day>0?[1-9]|[12]\d|3[01])[-/.](?<year>\d{2}|\d{4})$') {
+        return [pscustomobject]@{ Valid = $false; Date = $null; Error = "Ambiguous $Source date (month/day/year vs day/month/year): $RawValue"; TimezoneKind = 'ambiguous'; Offset = $null }
     }
 
-    return [pscustomobject]@{ Valid = $true; Date = $parsed; Error = $null }
+    $parsed = [datetimeoffset]::MinValue
+    $styles = [Globalization.DateTimeStyles]::AllowWhiteSpaces
+    $timezoneKind = 'unspecified-local'
+    $offset = $null
+
+    if ($trimmed -match '^(?<year>\d{4})[:\-](?<month>\d{2})[:\-](?<day>\d{2})(?:[ T](?<hour>\d{2})[:.]?(?<minute>\d{2})[:.]?(?<second>\d{2}))?(?<tz>Z|[+-]\d{2}:?\d{2})?$') {
+        $year = [int]$Matches.year
+        $month = [int]$Matches.month
+        $day = [int]$Matches.day
+        if (-not (Test-CalendarDate -Year $year -Month $month -Day $day)) {
+            return [pscustomobject]@{ Valid = $false; Date = $null; Error = "Impossible $Source date: $RawValue"; TimezoneKind = 'invalid'; Offset = $null }
+        }
+    }
+
+    if ($trimmed -match 'Z$|[+-]\d{2}:?\d{2}$') {
+        $timezoneKind = 'explicit-offset'
+        $styles = $styles -bor [Globalization.DateTimeStyles]::AssumeUniversal
+        $normalized = $trimmed -replace '^(\d{4}):(\d{2}):(\d{2})', '$1-$2-$3' -replace '([+-]\d{2})(\d{2})$', '$1:$2'
+        if (-not [datetimeoffset]::TryParse($normalized, [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$parsed)) {
+            return [pscustomobject]@{ Valid = $false; Date = $null; Error = "Invalid $Source date: $RawValue"; TimezoneKind = 'invalid'; Offset = $null }
+        }
+        $offset = $parsed.ToString('zzz')
+    }
+    elseif ($trimmed -match '^\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}$') {
+        $styles = $styles -bor [Globalization.DateTimeStyles]::AssumeLocal
+        if (-not [datetimeoffset]::TryParseExact($trimmed, 'yyyy:MM:dd HH:mm:ss', [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$parsed)) {
+            return [pscustomobject]@{ Valid = $false; Date = $null; Error = "Invalid $Source date: $RawValue"; TimezoneKind = 'invalid'; Offset = $null }
+        }
+        $offset = $parsed.ToString('zzz')
+    }
+    elseif ($trimmed -match '^\d{4}-\d{2}-\d{2} \d{6}$') {
+        $styles = $styles -bor [Globalization.DateTimeStyles]::AssumeLocal
+        if (-not [datetimeoffset]::TryParseExact($trimmed, 'yyyy-MM-dd HHmmss', [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$parsed)) {
+            return [pscustomobject]@{ Valid = $false; Date = $null; Error = "Invalid $Source date: $RawValue"; TimezoneKind = 'invalid'; Offset = $null }
+        }
+        $offset = $parsed.ToString('zzz')
+    }
+    elseif ($trimmed -match '^\d{4}-\d{2}-\d{2}$') {
+        $styles = $styles -bor [Globalization.DateTimeStyles]::AssumeLocal
+        if (-not [datetimeoffset]::TryParseExact($trimmed, 'yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$parsed)) {
+            return [pscustomobject]@{ Valid = $false; Date = $null; Error = "Invalid $Source date: $RawValue"; TimezoneKind = 'invalid'; Offset = $null }
+        }
+        $offset = $parsed.ToString('zzz')
+    }
+    elseif (-not [datetimeoffset]::TryParse($trimmed, [Globalization.CultureInfo]::InvariantCulture, $styles, [ref]$parsed)) {
+        return [pscustomobject]@{ Valid = $false; Date = $null; Error = "Invalid $Source date: $RawValue"; TimezoneKind = 'invalid'; Offset = $null }
+    }
+    else {
+        if ($parsed.Offset -eq [timespan]::Zero -and $trimmed -match 'Z$') {
+            $timezoneKind = 'explicit-offset'
+        }
+        $offset = $parsed.ToString('zzz')
+    }
+
+    return [pscustomobject]@{ Valid = $true; Date = $parsed; Error = $null; TimezoneKind = $timezoneKind; Offset = $offset }
+}
+
+function New-DateEvidence {
+    param(
+        [string]$Source,
+        [string]$RawValue,
+        [object]$Date,
+        [string]$Error,
+        [string]$Token,
+        [string]$TimezoneKind,
+        [string]$Offset
+    )
+
+    return [pscustomobject]@{
+        Source = $Source
+        RawValue = $RawValue
+        Date = $Date
+        Error = $Error
+        Token = $Token
+        TimezoneKind = $TimezoneKind
+        Offset = $Offset
+    }
 }
 
 function Get-DateEvidenceFromName {
@@ -89,30 +176,46 @@ function Get-DateEvidenceFromName {
     }
 
     $name = $File.BaseName
-    $match = [regex]::Match($name, '(?<date>20\d{2}[-_]?(?<month>0[1-9]|1[0-2])[-_]?(?<day>0[1-9]|[12]\d|3[01]))(?:[T _-]?(?<time>[0-2]\d[0-5]\d[0-5]\d))?')
+    $ambiguous = [regex]::Match($name, '(?<!\d)(?<token>(0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])[-/.](\d{2}|\d{4}))(?!\d)')
+    if ($ambiguous.Success) {
+        return New-DateEvidence -Source 'filename' -RawValue $ambiguous.Groups['token'].Value -Date $null -Error "Ambiguous filename date (month/day/year vs day/month/year): $($ambiguous.Groups['token'].Value)" -Token $ambiguous.Groups['token'].Value -TimezoneKind 'ambiguous' -Offset $null
+    }
+
+    $match = [regex]::Match($name, '(?<date>20\d{2}[-_]?(?<month>0[1-9]|1[0-2])[-_]?(?<day>0[1-9]|[12]\d|3[01]))(?:[T _-]?(?<time>[0-2]\d[0-5]\d[0-5]\d)(?<tz>Z|[+-][0-2]\d:?[0-5]\d)?)?')
     if (-not $match.Success) {
         $invalidToken = [regex]::Match($name, '20\d{2}[-_]?\d{2}[-_]?\d{2}')
         if ($invalidToken.Success) {
-            return [pscustomobject]@{ Source = 'filename'; RawValue = $invalidToken.Value; Date = $null; Error = "Invalid or ambiguous filename date: $($invalidToken.Value)"; Token = $invalidToken.Value }
+            return New-DateEvidence -Source 'filename' -RawValue $invalidToken.Value -Date $null -Error "Invalid or ambiguous filename date: $($invalidToken.Value)" -Token $invalidToken.Value -TimezoneKind 'invalid' -Offset $null
         }
         return $null
     }
 
+    $year = [int]$match.Groups['date'].Value.Substring(0, 4)
+    $month = [int]$match.Groups['month'].Value
+    $day = [int]$match.Groups['day'].Value
+    if (-not (Test-CalendarDate -Year $year -Month $month -Day $day)) {
+        return New-DateEvidence -Source 'filename' -RawValue $match.Groups['date'].Value -Date $null -Error "Impossible filename date: $($match.Groups['date'].Value)" -Token $match.Value -TimezoneKind 'invalid' -Offset $null
+    }
+
     $dateToken = $match.Groups['date'].Value
     $timeToken = $match.Groups['time'].Value
-    $rawValue = if ($timeToken) { "$dateToken $timeToken" } else { $dateToken }
-    $format = if ($timeToken) { 'yyyy-MM-dd HHmmss' } else { 'yyyy-MM-dd' }
-    $normalized = $dateToken -replace '_', '-' -replace '(?<!^)(\d{4})(\d{2})(\d{2})$', '$1-$2-$3'
+    $tzToken = $match.Groups['tz'].Value
+    $rawValue = $match.Value
+    $normalized = $dateToken -replace '_', '-'
     if ($normalized -notmatch '^\d{4}-\d{2}-\d{2}$') {
         $normalized = $normalized -replace '^(\d{4})(\d{2})(\d{2})$', '$1-$2-$3'
     }
-    $normalizedRaw = if ($timeToken) { "$normalized $timeToken" } else { $normalized }
+    $normalizedRaw = $normalized
+    if ($timeToken) {
+        $normalizedRaw = "$normalized $($timeToken.Substring(0,2)):$($timeToken.Substring(2,2)):$($timeToken.Substring(4,2))"
+        if ($tzToken) { $normalizedRaw += $tzToken }
+    }
     $parsed = Convert-ToDateOffset -RawValue $normalizedRaw -Source 'filename'
     if (-not $parsed.Valid) {
-        return [pscustomobject]@{ Source = 'filename'; RawValue = $rawValue; Date = $null; Error = $parsed.Error; Token = $rawValue }
+        return New-DateEvidence -Source 'filename' -RawValue $rawValue -Date $null -Error $parsed.Error -Token $rawValue -TimezoneKind $parsed.TimezoneKind -Offset $parsed.Offset
     }
 
-    return [pscustomobject]@{ Source = 'filename'; RawValue = $rawValue; Date = $parsed.Date; Error = $null; Token = $rawValue }
+    return New-DateEvidence -Source 'filename' -RawValue $rawValue -Date $parsed.Date -Error $null -Token $rawValue -TimezoneKind $parsed.TimezoneKind -Offset $parsed.Offset
 }
 
 function Get-DateEvidenceFromFolder {
@@ -130,9 +233,9 @@ function Get-DateEvidenceFromFolder {
     }
     $parsed = Convert-ToDateOffset -RawValue $normalized -Source 'folder'
     if (-not $parsed.Valid) {
-        return [pscustomobject]@{ Source = 'folder'; RawValue = $normalized; Date = $null; Error = $parsed.Error; Token = $normalized }
+        return New-DateEvidence -Source 'folder' -RawValue $normalized -Date $null -Error $parsed.Error -Token $normalized -TimezoneKind $parsed.TimezoneKind -Offset $parsed.Offset
     }
-    return [pscustomobject]@{ Source = 'folder'; RawValue = $normalized; Date = $parsed.Date; Error = $null; Token = $normalized }
+    return New-DateEvidence -Source 'folder' -RawValue $normalized -Date $parsed.Date -Error $null -Token $normalized -TimezoneKind $parsed.TimezoneKind -Offset $parsed.Offset
 }
 
 function Get-DateEvidenceFromExif {
@@ -146,29 +249,85 @@ function Get-DateEvidenceFromExif {
         Add-Type -AssemblyName System.Drawing -ErrorAction Stop
         $image = [Drawing.Image]::FromFile($File.FullName)
         try {
+            $offsetOriginal = $null
+            $offsetDigitized = $null
+            $offsetOriginalItem = $image.PropertyItems | Where-Object Id -eq 0x9011 | Select-Object -First 1
+            $offsetDigitizedItem = $image.PropertyItems | Where-Object Id -eq 0x9012 | Select-Object -First 1
+            if ($null -ne $offsetOriginalItem) {
+                $offsetOriginal = ([Text.Encoding]::ASCII.GetString($offsetOriginalItem.Value)).Trim([char]0).Trim()
+            }
+            if ($null -ne $offsetDigitizedItem) {
+                $offsetDigitized = ([Text.Encoding]::ASCII.GetString($offsetDigitizedItem.Value)).Trim([char]0).Trim()
+            }
+
+            $found = @()
             foreach ($propertyId in @(0x9003, 0x9004)) {
                 $property = $image.PropertyItems | Where-Object Id -eq $propertyId | Select-Object -First 1
-                if ($null -ne $property) {
-                    $rawValue = ([Text.Encoding]::ASCII.GetString($property.Value)).Trim([char]0).Trim()
-                    $source = if ($propertyId -eq 0x9003) { 'exif-DateTimeOriginal' } else { 'exif-DateTimeDigitized' }
-                    $parsed = Convert-ToDateOffset -RawValue $rawValue -Source $source
-                    return [pscustomobject]@{ Source = $source; RawValue = $rawValue; Date = if ($parsed.Valid) { $parsed.Date } else { $null }; Error = $parsed.Error; Token = $null }
-                }
+                if ($null -eq $property) { continue }
+                $rawValue = ([Text.Encoding]::ASCII.GetString($property.Value)).Trim([char]0).Trim()
+                $source = if ($propertyId -eq 0x9003) { 'exif-DateTimeOriginal' } else { 'exif-DateTimeDigitized' }
+                $offset = if ($propertyId -eq 0x9003) { $offsetOriginal } else { $offsetDigitized }
+                $parseValue = if ($offset -and $rawValue -notmatch 'Z$|[+-]\d{2}') { "$rawValue$offset" } else { $rawValue }
+                $parsed = Convert-ToDateOffset -RawValue $parseValue -Source $source
+                $found += New-DateEvidence -Source $source -RawValue $rawValue -Date $(if ($parsed.Valid) { $parsed.Date } else { $null }) -Error $parsed.Error -Token $null -TimezoneKind $parsed.TimezoneKind -Offset $parsed.Offset
             }
+            return @($found)
         }
         finally {
             $image.Dispose()
         }
     }
     catch {
-        return [pscustomobject]@{ Source = 'exif'; RawValue = $null; Date = $null; Error = $_.Exception.Message; Token = $null }
+        return @(New-DateEvidence -Source 'exif' -RawValue $null -Date $null -Error $_.Exception.Message -Token $null -TimezoneKind 'invalid' -Offset $null)
     }
+}
 
-    return @()
+function Get-EvidenceRank {
+    param([string]$Source)
+
+    switch ($Source) {
+        'exif-DateTimeOriginal' { 0 }
+        'exif-DateTimeDigitized' { 1 }
+        'filename' { 2 }
+        'folder' { 3 }
+        default { 4 }
+    }
+}
+
+function New-InaccessibleReview {
+    param(
+        [System.IO.FileInfo]$File,
+        [string]$Reason
+    )
+
+    [ordered]@{
+        path = $File.FullName
+        size = $File.Length
+        currentCreationTimeUtc = $File.CreationTimeUtc.ToString('o')
+        currentLastWriteTimeUtc = $File.LastWriteTimeUtc.ToString('o')
+        proposedCaptureTimeUtc = $null
+        source = $null
+        rawValue = $null
+        parsedFilenameToken = $null
+        timezoneKind = $null
+        timezoneOffset = $null
+        confidence = 'None'
+        status = 'Inaccessible'
+        reason = $Reason
+        policy = $Policy
+    }
 }
 
 function Get-FileDateReview {
     param([System.IO.FileInfo]$File)
+
+    try {
+        $stream = [IO.File]::Open($File.FullName, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+        $stream.Dispose()
+    }
+    catch {
+        return New-InaccessibleReview -File $File -Reason "File is inaccessible: $($_.Exception.Message)"
+    }
 
     $creationUtc = $File.CreationTimeUtc
     $lastWriteUtc = $File.LastWriteTimeUtc
@@ -176,34 +335,44 @@ function Get-FileDateReview {
     $evidence += @(Get-DateEvidenceFromExif -File $File)
     $evidence += @(Get-DateEvidenceFromName -File $File)
     $evidence = @($evidence | Where-Object { $null -ne $_ })
-    if ($evidence.Count -eq 0) {
+    if (@($evidence | Where-Object { $_.Source -like 'exif-*' -and $null -ne $_.Date }).Count -eq 0 -and @($evidence | Where-Object { $_.Source -eq 'filename' -and $null -ne $_.Date }).Count -eq 0) {
         $evidence += @(Get-DateEvidenceFromFolder -File $File)
     }
-    $validEvidence = @($evidence | Where-Object { $null -ne $_ -and $null -ne $_.Date })
+    $evidence = @($evidence | Where-Object { $null -ne $_ })
+    $validEvidence = @($evidence | Where-Object { $null -ne $_.Date })
     $status = 'NoEvidence'
     $confidence = 'None'
     $proposedDate = $null
     $source = $null
     $rawValue = $null
     $token = $null
-    $reason = 'No supported capture-date evidence was found.'
+    $timezoneKind = $null
+    $timezoneOffset = $null
+    $reason = 'No supported capture-date evidence was found. Filesystem CreationTime/LastWriteTime were treated as transfer evidence only.'
 
-    $evidenceErrors = @($evidence | Where-Object { $null -ne $_ -and $null -ne $_.Error })
+    $evidenceErrors = @($evidence | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.Error) })
     if ($evidenceErrors.Count -gt 0) {
         $status = 'InvalidEvidence'
         $reason = (@($evidenceErrors | ForEach-Object Error) -join '; ')
     }
     elseif ($validEvidence.Count -gt 0) {
-        $selected = $validEvidence | Sort-Object @{ Expression = { if ($_.Source -like 'exif-*') { 0 } else { 1 } } } | Select-Object -First 1
+        $selected = $validEvidence | Sort-Object @{ Expression = { Get-EvidenceRank -Source $_.Source } } | Select-Object -First 1
         $conflicting = @($validEvidence | Where-Object { $_.Date.UtcDateTime -ne $selected.Date.UtcDateTime })
+        $timezoneKinds = @($validEvidence | ForEach-Object { $_.TimezoneKind } | Select-Object -Unique)
         $proposedDate = $selected.Date
         $source = $selected.Source
         $rawValue = $selected.RawValue
         $token = $selected.Token
+        $timezoneKind = $selected.TimezoneKind
+        $timezoneOffset = $selected.Offset
         $confidence = if ($selected.Source -like 'exif-*') { 'High' } elseif ($selected.Source -eq 'folder') { 'Low' } else { 'Medium' }
         if ($conflicting.Count -gt 0) {
             $status = 'Conflict'
             $reason = 'Multiple date sources disagree; no automatic change is allowed.'
+        }
+        elseif ($timezoneKinds.Count -gt 1 -and $timezoneKinds -contains 'explicit-offset' -and $timezoneKinds -contains 'unspecified-local') {
+            $status = 'Conflict'
+            $reason = 'Timezone kinds disagree (explicit offset vs naive local); no automatic change is allowed.'
         }
         elseif ($proposedDate.UtcDateTime -gt $FutureToleranceUtc.ToUniversalTime()) {
             $status = 'FutureDate'
@@ -224,6 +393,8 @@ function Get-FileDateReview {
         source = $source
         rawValue = $rawValue
         parsedFilenameToken = $token
+        timezoneKind = $timezoneKind
+        timezoneOffset = $timezoneOffset
         confidence = $confidence
         status = $status
         reason = $reason
@@ -301,6 +472,8 @@ else {
                 source = $null
                 rawValue = $null
                 parsedFilenameToken = $null
+                timezoneKind = $null
+                timezoneOffset = $null
                 confidence = 'None'
                 status = 'Inaccessible'
                 reason = "$($_.Exception.Message) at $($_.InvocationInfo.PositionMessage)"
@@ -349,6 +522,7 @@ $report = [ordered]@{
     generatedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
     dryRun = (-not $Apply)
     policy = $Policy
+    timezonePolicy = $script:TimezonePolicy
     futureToleranceUtc = $FutureToleranceUtc.ToUniversalTime().ToString('o')
     items = @($reviews)
 }
@@ -365,7 +539,14 @@ if ($Apply) {
         New-Item -Path $manifestDirectory -ItemType Directory -Force | Out-Null
     }
     $approved = @($ApprovePath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { [System.IO.Path]::GetFullPath($_) })
-    foreach ($review in $reviews | Where-Object { $_.status -eq 'Proposed' -and ($_.confidence -eq 'High' -or $approved -contains $_.path -or (Get-PropertyValue -Value $_ -Name 'action') -eq 'approve' -or (Get-PropertyValue -Value $_ -Name 'action') -eq 'manual') }) {
+    foreach ($review in $reviews | Where-Object {
+            $_.status -eq 'Proposed' -and (
+                $approved -contains $_.path -or
+                (Get-PropertyValue -Value $_ -Name 'action') -eq 'approve' -or
+                (Get-PropertyValue -Value $_ -Name 'action') -eq 'manual' -or
+                ($ApproveHighConfidence -and $_.confidence -eq 'High')
+            )
+        }) {
         $current = Get-Item -LiteralPath $review.path -Force
         if ($current.Length -ne [long]$review.size -or -not (Test-FileTimeMatch -Actual $current.LastWriteTimeUtc -Expected $review.currentLastWriteTimeUtc)) {
             throw "Stale file refused: $($review.path)"

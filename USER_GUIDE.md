@@ -27,10 +27,10 @@ gh --version
 
 `gh` is useful for repository work but is not required to run the photo workflow.
 
-Install the pinned Czkawka CLI once. Replace `<sha256>` with the published checksum for Czkawka `12.0.1`:
+Install the pinned Czkawka CLI once. The checksum is stored in `tools/czkawka/config.json`:
 
 ```powershell
-pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\install.ps1 -Version 12.0.1 -Checksum "<sha256>"
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\install.ps1
 ```
 
 Do not use `-SkipChecksum` for a real installation.
@@ -204,7 +204,7 @@ Run the install command and verify `tools\czkawka\bin\czkawka_cli.exe` exists.
 
 **The scan rejects the root**
 
-Use a UNC path such as `\\server\photos`. The scan wrapper intentionally rejects ordinary local paths and missing shares.
+Use a UNC path such as `\\server\photos` for the photo share. Missing shares fail before Czkawka starts. Local folders are accepted only when you pass `-AllowLocalRoot`, which is intended for test fixtures.
 
 **The reviewer does not open**
 
@@ -223,6 +223,7 @@ Do not overwrite or modify the quarantine file or recreate the source path manua
 Run the local automated checks from the repository root:
 
 ```powershell
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase1-tests.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase2-tests.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase2-smoke.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase3-tests.ps1

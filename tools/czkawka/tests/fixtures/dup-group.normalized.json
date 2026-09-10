@@ -7,7 +7,7 @@
   "czkawkaVersion": "",
   "scanRoot": "",
   "scanTimestampUtc": "",
-  "generatedAtUtc": "2026-09-08T08:02:57.8289334Z",
+  "generatedAtUtc": "2026-09-10T04:58:46.4420124Z",
   "groupCount": 1,
   "groups": [
     {
@@ -16,12 +16,14 @@
       "groupId": "dup-001",
       "kind": "duplicate",
       "isReference": false,
-      "warnings": null,
+      "warnings": [
+        null
+      ],
       "entries": [
         {
           "path": "\\\\server\\photos\\incoming\\a.jpg",
           "size": 1024,
-          "modifiedTime": "2024-01-15T08:00:00Z",
+          "modifiedTime": "01/15/2024 08:00:00",
           "hash": "abc123",
           "width": null,
           "height": null,
@@ -39,7 +41,7 @@
         {
           "path": "\\\\server\\photos\\incoming\\b.jpg",
           "size": 1024,
-          "modifiedTime": "2024-01-15T08:00:00Z",
+          "modifiedTime": "01/15/2024 08:00:00",
           "hash": "abc123",
           "width": null,
           "height": null,

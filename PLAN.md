@@ -97,6 +97,8 @@ Build a low-maintenance Windows workflow around the unchanged Czkawka CLI. The C
 - Use a native reviewer for actions and static HTML/JSON for report portability. Do not depend on a browser being allowed to manipulate UNC files.
 - Keep confidence explainable and advisory. No automatic deletion, timestamp changes, or automatic keep decisions.
 - Treat capture time and filesystem time as separate concepts; default to changing Windows CreationTime for album sorting while preserving LastWriteTime unless the user explicitly selects a different policy.
+- Naive EXIF and filename timestamps are unspecified local time. Explicit offsets and Zulu timestamps convert to UTC. Mixed timezone kinds and disagreeing instants are conflicts, not guesses.
+- High-confidence EXIF batch apply requires `-ApproveHighConfidence` in addition to `-Apply`. Individual items still use approve paths or a decision file.
 - Start with `dup` hash mode and `image`; add name/size modes only if real scan results show a useful gap.
 
 ## Further Considerations
