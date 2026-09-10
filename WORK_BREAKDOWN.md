@@ -6,7 +6,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 84%**
+**Overall implementation: 86%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
@@ -14,7 +14,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 | 2 | Stable local result model | Complete | 100% | Phase 1 |
 | 3 | Metadata date repair utility | Complete | 100% | Phase 2 |
 | 4 | Confidence and human grouping | Complete | 100% | Phases 2-3 |
-| 5 | Native Windows review experience | In progress | 85% | Phase 4 |
+| 5 | Native Windows review experience | Complete | 100% | Phase 4 |
 | 6 | Safe remediation and undo | In progress | 60% | Phase 5 |
 | 7 | Operational polish | In progress | 40% | Phase 6 |
 
@@ -191,11 +191,11 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 - [x] Add `tools/czkawka/review.ps1` using a small native PowerShell/.NET GUI.
 - [x] Display side-by-side image previews with graceful handling for unavailable images.
-- [ ] Show confidence tier, explanation, complete evidence, path, filename, dimensions, size, modified time, proposed date, and suggested keep.
+- [x] Show confidence tier, explanation, complete evidence, path, filename, dimensions, size, modified time, proposed date, and suggested keep.
 - [x] Add quick actions: keep suggestion, choose another keep, quarantine selected, skip/defer, open file, open folder, and protect.
 - [x] Include date-repair proposals in the same review workflow or provide a clear linked review screen.
 - [x] Require explicit confirmation for every quarantine or timestamp change.
-- [ ] Generate static HTML/JSON reports with search support for archival, while keeping filesystem actions native.
+- [x] Generate static HTML/JSON reports with search support for archival, while keeping filesystem actions native.
 - [x] Track decisions so deferred groups return to the reviewer.
 
 **Acceptance checks**
@@ -207,12 +207,13 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - UNC paths can be opened from the interface.
 - Unavailable or inaccessible files are clearly marked.
 
-**Status:** In progress, 85%
+**Status:** Complete, 100%
 
 **Agent update log:**
 
 - 2026-09-08: Completed `review.ps1` with native WinForms group review, side-by-side preview fallback, evidence/date details, persisted keep/protect/defer/quarantine-request decisions, explicit quarantine confirmation, and static HTML export. Manual acceptance passed for multi-step navigation, per-group defer persistence, direct and unavailable preview selection, keep-suggestion ordering/highlighting, protection toggling, quarantine confirmation, report export, and a read-only review of the real `Z:` share photos. PowerShell syntax and export-only validation also passed with real local JPEG and mapped-share fixtures.
 - 2026-09-08: Audit correction: reviewer executable tests, complete visible evidence fields, HTML search, and reproducible UNC/inaccessible/deferred acceptance artifacts remain incomplete despite successful manual checks.
+- 2026-09-10: Completed Phase 5 acceptance evidence. The reviewer now shows complete group/item evidence and metadata, exports searchable HTML and JSON archives, and `phase5-tests.ps1` reproducibly validates read-only export behavior for inaccessible, unavailable, deferred, and UNC-shaped entries. Phase 5 tests passed; Phase 6 was not advanced.
 
 ## Phase 6: Safe Remediation and Undo
 

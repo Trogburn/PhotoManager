@@ -18,7 +18,8 @@ This repository now includes a pinned Windows installation and read-only scan wo
 - `tools/czkawka/tests/phase3-smoke.ps1` and `tools/czkawka/tests/phase3-tests.ps1` - Validate Phase 3 evidence, dry-run, approval, and undo behavior.
 - `tools/czkawka/classify-results.ps1` - Merges overlapping normalized findings into explainable, advisory review groups with confidence tiers and keep suggestions.
 - `tools/czkawka/tests/phase4-tests.ps1` - Validates deterministic grouping, confidence tiers, labels, evidence retention, and protected-reference behavior.
-- `tools/czkawka/review.ps1` - Native Windows reviewer for one classified group at a time, with previews, persisted decisions, and static HTML export.
+- `tools/czkawka/tests/phase5-tests.ps1` - Runs noninteractive reviewer archive validation, including inaccessible, deferred, and UNC-shaped fixture entries.
+- `tools/czkawka/review.ps1` - Native Windows reviewer for one classified group at a time, with previews, complete evidence, persisted decisions, and searchable HTML/JSON archives.
 - `tools/czkawka/run-workflow.ps1` - Runs scan, normalization, classification, optional date review, and reviewer launch as one safe workflow.
 - `tools/czkawka/remediate.ps1` - Dry-run-first quarantine workflow with stale-file checks, transaction logging, and guarded undo.
 - `tools/czkawka/tests/phase6-tests.ps1` - Validates remediation safety against temporary files.
@@ -47,6 +48,9 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phas
 
 # Classify normalized findings without changing files
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\classify-results.ps1 -InputPath .\reports\czkawka\normalized.json
+
+# Validate the read-only native reviewer exports
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase5-tests.ps1
 
 # Open the native reviewer; Phase 5 records decisions but does not move files
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\review.ps1 -InputPath .\reports\czkawka\normalized.classified.json -DateReviewPath .\reports\dates\date-review.json
@@ -77,6 +81,7 @@ The checked-in `tools/czkawka/config.json` uses repository-relative local paths 
 - Cache is retained by default; the `-Fresh` switch maps to Czkawka's `-H` option for a cache bypass when needed.
 - The Phase 2 normalizer accepts both the stable local schema and captured Czkawka 12 HASH/image JSON. It emits schema version `1`, preserving source scan, group membership, file metadata, reference state, raw artifact paths, CLI version, scan root, and scan timestamp. `parse-results.ps1 -ScanReportDir` combines `dup` and `image` outputs from one scan folder.
 - The normalizer retains warning, inaccessible-file, and stale-file evidence for later human review; it does not delete or alter files.
+- The Phase 5 reviewer visibly shows confidence, explanation, evidence, path/filename, dimensions, size, modified time, proposed date, access state, and suggested keep. It writes `review.html` with case-insensitive client-side search and `review.json` with searchable group/item fields for archival or scripted filtering. Missing, inaccessible, and UNC-shaped paths remain visible; exports perform no filesystem actions.
 - Date repair is dry-run by default. EXIF `DateTimeOriginal` outranks digitized date, then filename, then folder names. Sidecars are excluded. Naive timestamps are unspecified local time; explicit offsets convert to UTC. Invalid, ambiguous, conflicting, mixed-timezone, or future dates are not applied automatically.
 - Timestamp changes require `-Apply` plus an explicit approve path, decision file, or `-ApproveHighConfidence` for high-confidence EXIF items. The default policy changes CreationTime only, records an append-only undo manifest, and supports `-Undo`.
 - Saved reports are revalidated for file size and LastWriteTime before changes. Decision files support `skip`, `protect`, `approve`, and `manual` actions; manual decisions must include a `date` value.

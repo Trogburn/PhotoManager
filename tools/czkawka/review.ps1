@@ -7,6 +7,8 @@ param(
 
     [string]$HtmlReportPath = '.\reports\review\review.html',
 
+    [string]$JsonReportPath = '.\reports\review\review.json',
+
     [string]$DateReviewPath,
 
     [switch]$ExportOnly
@@ -29,6 +31,12 @@ function ConvertTo-HtmlText {
     return [System.Net.WebUtility]::HtmlEncode([string]$Value)
 }
 
+function Get-ReviewValue {
+    param([object]$Object, [string]$Name)
+    if ($null -eq $Object -or $null -eq $Object.PSObject.Properties[$Name]) { return $null }
+    return $Object.PSObject.Properties[$Name].Value
+}
+
 function Ensure-ParentDirectory {
     param([string]$FilePath)
     $parent = Split-Path -Path $FilePath -Parent
@@ -41,6 +49,14 @@ function Save-Decisions {
     param([hashtable]$DecisionMap)
     Ensure-ParentDirectory -FilePath $DecisionPath
     @($DecisionMap.Values | Sort-Object groupId) | ConvertTo-Json -Depth 8 | Set-Content -Path $DecisionPath -Encoding UTF8
+}
+
+function Get-DateProposal {
+    param([object]$Item)
+    if ($dateReviews.ContainsKey([string]$Item.path)) {
+        return $dateReviews[[string]$Item.path]
+    }
+    return $null
 }
 
 $decisionMap = @{}
@@ -64,17 +80,80 @@ if ($DateReviewPath -and (Test-Path -LiteralPath $DateReviewPath)) {
 function Write-HtmlReport {
     Ensure-ParentDirectory -FilePath $HtmlReportPath
     $rows = foreach ($group in $groups) {
-        $items = @($group.items)
-        $paths = ($items | ForEach-Object { ConvertTo-HtmlText $_.path }) -join '<br />'
-        "<tr><td>$(ConvertTo-HtmlText $group.groupId)</td><td>$(ConvertTo-HtmlText $group.confidenceTier)</td><td>$(ConvertTo-HtmlText (($group.labels -join ', ')))</td><td>$(ConvertTo-HtmlText $group.suggestedKeepPath)</td><td>$paths</td><td>$(ConvertTo-HtmlText $group.recommendationReason)</td></tr>"
+        foreach ($item in @($group.items)) {
+            $date = Get-DateProposal -Item $item
+            $evidence = (@(Get-ReviewValue -Object $item -Name 'evidence') | ConvertTo-Json -Depth 12 -Compress)
+            $modifiedTime = Get-ReviewValue -Object $item -Name 'modifiedTime'
+            $accessState = Get-ReviewValue -Object $item -Name 'accessState'
+            $error = Get-ReviewValue -Object $item -Name 'error'
+            $warning = Get-ReviewValue -Object $item -Name 'warning'
+            $proposedDate = if ($null -ne $date) { $date.proposedCaptureTimeUtc } else { $null }
+            $searchText = @(
+                $group.groupId, $group.confidenceTier, ($group.labels -join ' '),
+                $group.suggestedKeepPath, $group.recommendationReason, $item.path,
+                ([IO.Path]::GetFileName($item.path)), $item.width, $item.height,
+                $item.size, $modifiedTime, $accessState, $error,
+                $warning, $proposedDate, $evidence
+            ) -join ' '
+            $isSuggested = $item.path -eq $group.suggestedKeepPath
+            "<tr data-search=""$(ConvertTo-HtmlText $searchText)""><td>$(ConvertTo-HtmlText $group.groupId)</td><td>$(ConvertTo-HtmlText $group.confidenceTier)</td><td>$(ConvertTo-HtmlText (($group.labels -join ', ')))</td><td>$(ConvertTo-HtmlText $group.recommendationReason)</td><td>$(ConvertTo-HtmlText $item.path)</td><td>$(ConvertTo-HtmlText ([IO.Path]::GetFileName($item.path)))</td><td>$(ConvertTo-HtmlText (""$($item.width)x$($item.height)""))</td><td>$(ConvertTo-HtmlText $item.size)</td><td>$(ConvertTo-HtmlText $modifiedTime)</td><td>$(ConvertTo-HtmlText $proposedDate)</td><td>$(if ($isSuggested) { 'yes' } else { 'no' })</td><td>$(ConvertTo-HtmlText $accessState)</td><td>$(ConvertTo-HtmlText $evidence)</td></tr>"
+        }
     }
     $html = @"
 <!doctype html>
-<head><meta charset="utf-8"><title>Photo Review</title><style>body{font-family:Segoe UI,Arial,sans-serif;margin:2rem;color:#202124}table{border-collapse:collapse;width:100%}th,td{border:1px solid #c7c7c7;padding:.5rem;text-align:left;vertical-align:top}th{background:#eef2f5}.tier{white-space:nowrap}</style></head>
-<body><h1>Photo Review</h1><p>Advisory report. No filesystem actions are performed by this export.</p><table><thead><tr><th>Group</th><th>Confidence</th><th>Labels</th><th>Suggested keep</th><th>Items</th><th>Reason</th></tr></thead><tbody>$($rows -join "`n")</tbody></table></body>
+<head><meta charset="utf-8"><title>Photo Review</title><style>body{font-family:Segoe UI,Arial,sans-serif;margin:2rem;color:#202124}input{font-size:1rem;padding:.5rem;width:28rem}table{border-collapse:collapse;width:100%;margin-top:1rem}th,td{border:1px solid #c7c7c7;padding:.5rem;text-align:left;vertical-align:top;max-width:28rem;overflow-wrap:anywhere}th{background:#eef2f5;position:sticky;top:0}.tier{white-space:nowrap}.notice{background:#fff8dc;padding:.75rem}</style></head>
+<body><h1>Photo Review</h1><p class="notice">Advisory archive. No filesystem actions are performed by this export.</p><label for="search">Search groups, paths, filenames, evidence, dates, or access state:</label><br /><input id="search" type="search" placeholder="Type to filter..." oninput="filterRows()" /><span id="count"></span><table><thead><tr><th>Group</th><th>Confidence</th><th>Labels</th><th>Reason</th><th>Path</th><th>Filename</th><th>Dimensions</th><th>Size</th><th>Modified</th><th>Proposed date</th><th>Suggested keep</th><th>Access</th><th>Complete evidence</th></tr></thead><tbody>$($rows -join "`n")</tbody></table><script>function filterRows(){const q=document.getElementById('search').value.toLowerCase();let n=0;document.querySelectorAll('tbody tr').forEach(r=>{const show=!q||r.dataset.search.toLowerCase().includes(q);r.hidden=!show;if(show)n++;});document.getElementById('count').textContent=' '+n+' matching item(s)';}filterRows();</script></body>
 </html>
 "@
     Set-Content -Path $HtmlReportPath -Value $html -Encoding UTF8
+}
+
+function Write-JsonReport {
+    Ensure-ParentDirectory -FilePath $JsonReportPath
+    $archiveGroups = foreach ($group in $groups) {
+        [ordered]@{
+            groupId = $group.groupId
+            confidenceTier = $group.confidenceTier
+            labels = @($group.labels)
+            explanation = $group.explanation
+            recommendationReason = $group.recommendationReason
+            suggestedKeepPath = $group.suggestedKeepPath
+            searchText = (@($group.groupId, $group.confidenceTier, ($group.labels -join ' '), $group.suggestedKeepPath, $group.recommendationReason) -join ' ')
+            items = @($group.items | ForEach-Object {
+                $date = Get-DateProposal -Item $_
+                $proposedDate = if ($null -ne $date) { $date.proposedCaptureTimeUtc } else { $null }
+                $modifiedTime = Get-ReviewValue -Object $_ -Name 'modifiedTime'
+                $accessState = Get-ReviewValue -Object $_ -Name 'accessState'
+                $error = Get-ReviewValue -Object $_ -Name 'error'
+                $warning = Get-ReviewValue -Object $_ -Name 'warning'
+                $evidence = @(Get-ReviewValue -Object $_ -Name 'evidence')
+                [ordered]@{
+                    path = $_.path
+                    filename = [IO.Path]::GetFileName($_.path)
+                    dimensions = if ($null -ne $_.width -and $null -ne $_.height) { "$($_.width)x$($_.height)" } else { $null }
+                    width = $_.width
+                    height = $_.height
+                    size = $_.size
+                    modifiedTime = $modifiedTime
+                    proposedDate = $proposedDate
+                    suggestedKeep = ($_.path -eq $group.suggestedKeepPath)
+                    accessState = $accessState
+                    error = $error
+                    warning = $warning
+                    evidence = $evidence
+                    searchText = (@($_.path, [IO.Path]::GetFileName($_.path), $_.width, $_.height, $_.size, $modifiedTime, $accessState, $error, $warning, $proposedDate, ($evidence | ConvertTo-Json -Depth 12 -Compress)) -join ' ')
+                }
+            })
+        }
+    }
+    [ordered]@{
+        schemaVersion = 1
+        source = 'review-archive'
+        generatedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
+        search = [ordered]@{ supported = $true; fields = @('groupId', 'confidenceTier', 'labels', 'path', 'filename', 'dimensions', 'size', 'modifiedTime', 'proposedDate', 'accessState', 'evidence'); query = 'Case-insensitive substring search over each group and item searchText.' }
+        groupCount = $groups.Count
+        groups = @($archiveGroups)
+    } | ConvertTo-Json -Depth 30 | Set-Content -Path $JsonReportPath -Encoding UTF8
 }
 
 function Test-ItemProtected {
@@ -86,8 +165,9 @@ function Test-ItemProtected {
 }
 
 Write-HtmlReport
+Write-JsonReport
 if ($ExportOnly) {
-    [pscustomobject]@{ htmlReportPath = (Resolve-Path -LiteralPath $HtmlReportPath).Path; groupCount = $groups.Count; exportOnly = $true }
+    [pscustomobject]@{ htmlReportPath = (Resolve-Path -LiteralPath $HtmlReportPath).Path; jsonReportPath = (Resolve-Path -LiteralPath $JsonReportPath).Path; groupCount = $groups.Count; exportOnly = $true }
     return
 }
 
@@ -203,7 +283,7 @@ function Refresh-Review {
     foreach ($item in @($group.items)) { [void]$list.Items.Add([string]$item.path) }
     $list.SelectedIndex = [math]::Min($currentItemIndex, [math]::Max(0, $list.Items.Count - 1))
     $selectedItem = Get-CurrentItem
-    $details.Text = "Decision: $script:decisionNotice`r`nSelected item: $($selectedItem.path)`r`nConfidence: $($group.confidenceTier)`r`nLabels: $($group.labels -join ', ')`r`nSuggested keep: $($group.suggestedKeepPath)`r`nReason: $($group.recommendationReason)`r`n`r`n" + (($group.items | ForEach-Object { $date = if ($dateReviews.ContainsKey([string]$_.path)) { $dateReviews[[string]$_.path].proposedCaptureTimeUtc } else { 'n/a' }; "$($_.path)`r`n  Size: $($_.size)  Dimensions: $($_.width)x$($_.height)  Difference: $($_.perceptualDifference)  Proposed date: $date  Protected: $(Test-ItemProtected $_)" }) -join "`r`n")
+    $details.Text = "Decision: $script:decisionNotice`r`nSelected item: $($selectedItem.path)`r`nConfidence: $($group.confidenceTier)`r`nLabels: $($group.labels -join ', ')`r`nSuggested keep: $($group.suggestedKeepPath)`r`nReason: $($group.recommendationReason)`r`n`r`nExplanation/evidence:`r`n$(($group.explanation | ConvertTo-Json -Depth 20))`r`n`r`n" + (($group.items | ForEach-Object { $date = Get-DateProposal -Item $_; $proposed = if ($null -ne $date) { $date.proposedCaptureTimeUtc } else { 'n/a' }; $modified = if ($null -ne $_.modifiedTime) { $_.modifiedTime } else { 'n/a' }; $access = if ($_.accessState) { $_.accessState } else { 'available/unreported' }; $evidence = @(Get-ReviewValue -Object $_ -Name 'evidence'); "$($_.path)`r`n  Filename: $([IO.Path]::GetFileName($_.path))`r`n  Size: $($_.size)  Dimensions: $($_.width)x$($_.height)  Modified: $modified  Difference: $($_.perceptualDifference)`r`n  Proposed date: $proposed  Suggested keep: $($_.path -eq $group.suggestedKeepPath)  Protected: $(Test-ItemProtected $_)  Access: $access  Warning: $($_.warning)  Error: $($_.error)`r`n  Complete evidence: $($evidence | ConvertTo-Json -Depth 20 -Compress)" }) -join "`r`n`r`n")
     $itemIndex = 0
     foreach ($item in @($group.items)) {
         $capturedIndex = $itemIndex

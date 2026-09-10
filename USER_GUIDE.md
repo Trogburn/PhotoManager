@@ -100,6 +100,7 @@ normalized\combined.normalized.json
 classified.json
 decisions.json
 review.html
+review.json
 ```
 
 ## Reviewer Actions
@@ -115,7 +116,7 @@ The reviewer shows one group at a time.
 - **Queue selected quarantine**: requests quarantine for only the selected item after confirmation.
 - **Open file / Open folder**: opens the selected item in Windows Explorer.
 
-Unavailable previews remain selectable and are clearly labeled. The HTML report is for browsing and archival; filesystem actions remain in PowerShell.
+Unavailable previews remain selectable and are clearly labeled. The native details show the confidence explanation, complete evidence, filename, dimensions, size, modified time, proposed date, access state, and suggested keep. The HTML report has a search box for paths, filenames, evidence, dates, and access states; `review.json` contains equivalent searchable fields for archival or scripted filtering. Both exports are read-only; filesystem actions remain in PowerShell.
 
 ## Quarantine: Preview First
 
@@ -208,7 +209,7 @@ Use a UNC path such as `\\server\photos` for the photo share. Missing shares fai
 
 **The reviewer does not open**
 
-Run the command with `-ExportOnly` to verify the classified input and HTML report. Use PowerShell 7, not Windows PowerShell 5.1, for the complete workflow.
+Run the command with `-ExportOnly` to verify the classified input and both archive formats. Use PowerShell 7, not Windows PowerShell 5.1, for the complete workflow.
 
 **A file was refused during remediation**
 
@@ -229,5 +230,6 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phas
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase3-tests.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase3-smoke.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase4-tests.ps1
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase5-tests.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase6-tests.ps1
 ```
