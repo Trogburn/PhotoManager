@@ -35,6 +35,19 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\install.ps
 
 Do not use `-SkipChecksum` for a real installation.
 
+### Updating Czkawka safely
+
+The installer will not replace an existing binary unless you explicitly pass `-Force`. For an update, select an official release, update the version, download URL, and SHA256 checksum together in `tools/czkawka/config.json`, review that change, and then run:
+
+```powershell
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\install.ps1 -Force
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\run-all-tests.ps1
+```
+
+Never use `-SkipChecksum` for production and never silently copy a replacement executable. Keep the previous pinned values until the validation suite passes.
+
+The Czkawka CLI is third-party software downloaded unchanged from its official [GitHub releases](https://github.com/qarmin/czkawka/releases). The current version and SHA256 are recorded in `tools/czkawka/config.json`; consult the upstream repository and release license/notices for redistribution terms.
+
 ## Configure Your Share
 
 Edit `tools/czkawka/config.json` and replace these placeholders:
@@ -67,7 +80,7 @@ This command:
 - Normalizes both result files.
 - Combines and classifies the findings.
 - Opens the native reviewer.
-- Writes decisions and an HTML report inside the new scan report folder.
+- Writes decisions plus searchable HTML and JSON reports inside the new scan report folder.
 
 To bypass the Czkawka cache:
 
@@ -100,7 +113,18 @@ normalized\combined.normalized.json
 classified.json
 decisions.json
 review.html
+review.json
 ```
+
+## Optional Task Scheduler Scan
+
+If recurring reports are useful, schedule only this read-only command:
+
+```powershell
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File C:\dev\GitHub\QnapServerManagement\tools\czkawka\run-workflow.ps1 -ScanRoot "\\server\photos" -ExportOnly
+```
+
+Use an account with share read permission and local report write permission. Do not schedule remediation, `-Apply`, date-repair apply commands, reviewer decisions, or any quarantine path. This scan/report job cannot quarantine, delete, rename, or change timestamps; review and any approved remediation remain manual.
 
 ## Reviewer Actions
 
@@ -115,7 +139,7 @@ The reviewer shows one group at a time.
 - **Queue selected quarantine**: requests quarantine for only the selected item after confirmation.
 - **Open file / Open folder**: opens the selected item in Windows Explorer.
 
-Unavailable previews remain selectable and are clearly labeled. The HTML report is for browsing and archival; filesystem actions remain in PowerShell.
+Unavailable previews remain selectable and are clearly labeled. The native details show the confidence explanation, complete evidence, filename, dimensions, size, modified time, proposed date, access state, and suggested keep. The HTML report has a search box for paths, filenames, evidence, dates, and access states; `review.json` contains equivalent searchable fields for archival or scripted filtering. Both exports are read-only; filesystem actions remain in PowerShell.
 
 ## Quarantine: Preview First
 
@@ -208,7 +232,7 @@ Use a UNC path such as `\\server\photos` for the photo share. Missing shares fai
 
 **The reviewer does not open**
 
-Run the command with `-ExportOnly` to verify the classified input and HTML report. Use PowerShell 7, not Windows PowerShell 5.1, for the complete workflow.
+Run the command with `-ExportOnly` to verify the classified input and both archive formats. Use PowerShell 7, not Windows PowerShell 5.1, for the complete workflow.
 
 **A file was refused during remediation**
 
@@ -229,5 +253,10 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phas
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase3-tests.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase3-smoke.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase4-tests.ps1
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase5-tests.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase6-tests.ps1
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase7-tests.ps1
+
+# One command for the complete suite and safe end-to-end check
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\run-all-tests.ps1
 ```

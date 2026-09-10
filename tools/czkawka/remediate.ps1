@@ -49,6 +49,25 @@ function Test-TimeMatch {
     return [math]::Abs(($Actual.ToUniversalTime() - $expectedDate).TotalSeconds) -le 1
 }
 
+function Get-ComparableHash {
+    param([object]$Value)
+    if ($null -eq $Value) { return $null }
+    $text = [string]$Value
+    if ($text -match '^[0-9a-fA-F]{64}$') { return $text.ToLowerInvariant() }
+    return $null
+}
+
+function Get-FileEvidence {
+    param([System.IO.FileInfo]$File)
+    $hash = (Get-FileHash -LiteralPath $File.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    return [ordered]@{
+        path = $File.FullName
+        size = [long]$File.Length
+        lastWriteTimeUtc = $File.LastWriteTimeUtc.ToString('o')
+        sha256 = $hash
+    }
+}
+
 function Get-RelativeDestination {
     param([string]$SourcePath, [string]$Root, [string]$Quarantine)
     $relative = $null
@@ -96,7 +115,9 @@ if ($Undo) {
         if (-not (Test-Path -LiteralPath $entry.destination)) { throw "Undo refused; quarantine file is missing: $($entry.destination)" }
         if (Test-Path -LiteralPath $entry.source) { throw "Undo refused; source already exists: $($entry.source)" }
         $current = Get-Item -LiteralPath $entry.destination -Force
-        if ($current.Length -ne [long]$entry.size -or -not (Test-TimeMatch $current.LastWriteTimeUtc $entry.quarantineLastWriteTimeUtc)) { throw "Undo refused; quarantine file changed: $($entry.destination)" }
+        $currentHash = (Get-FileHash -LiteralPath $entry.destination -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($current.Length -ne [long]$entry.postMove.size -or -not (Test-TimeMatch $current.LastWriteTimeUtc $entry.postMove.lastWriteTimeUtc) -or
+            $currentHash -ne $entry.postMove.sha256) { throw "Undo refused; quarantine file changed: $($entry.destination)" }
     }
     foreach ($entry in ($entries | Sort-Object transactionUtc -Descending)) {
         $sourceParent = Split-Path -Path $entry.source -Parent
@@ -140,22 +161,40 @@ foreach ($path in @($itemsByPath.Keys | Sort-Object)) {
     }
     if (-not (Test-Path -LiteralPath $path)) { $results += [ordered]@{ source = $path; status = 'failed'; reason = 'source-missing' }; continue }
     $source = Get-Item -LiteralPath $path -Force
-    if ($source.Length -ne [long](Get-Value $item 'size') -or -not (Test-TimeMatch $source.LastWriteTimeUtc (Get-Value $item 'modifiedTime'))) {
+    $expectedHash = Get-ComparableHash -Value (Get-Value $item 'hash')
+    $sourceHash = $null
+    if ($null -ne $expectedHash) {
+        $sourceHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+    if ($source.Length -ne [long](Get-Value $item 'size') -or -not (Test-TimeMatch $source.LastWriteTimeUtc (Get-Value $item 'modifiedTime')) -or
+        ($null -ne $expectedHash -and $sourceHash -ne $expectedHash)) {
         $results += [ordered]@{ source = $path; status = 'refused'; reason = 'stale-file' }
         continue
     }
     $destination = Get-RelativeDestination -SourcePath $path -Root $scanRootValue -Quarantine $quarantinePath
-    $entry = [ordered]@{ source = $path; destination = $destination; size = $source.Length; sourceLastWriteTimeUtc = $source.LastWriteTimeUtc.ToString('o'); action = 'quarantine'; reason = 'explicit-review-request'; transactionUtc = (Get-Date).ToUniversalTime().ToString('o'); status = if ($Apply) { 'moved' } else { 'dry-run' } }
+    $beforeMove = Get-FileEvidence -File $source
+    $entry = [ordered]@{
+        source = $path
+        destination = $destination
+        action = 'quarantine'
+        reason = 'explicit-review-request'
+        reviewerAction = 'quarantine-requested'
+        scanId = Get-Value $classified 'scanId'
+        transactionUtc = (Get-Date).ToUniversalTime().ToString('o')
+        status = if ($Apply) { 'moved' } else { 'dry-run' }
+        preMove = $beforeMove
+    }
     if ($Apply) {
         try {
             Move-Item -LiteralPath $path -Destination $destination -ErrorAction Stop
             $moved = Get-Item -LiteralPath $destination -Force
-            $entry.quarantineLastWriteTimeUtc = $moved.LastWriteTimeUtc.ToString('o')
+            $entry.postMove = Get-FileEvidence -File $moved
             Add-Transaction $entry
         }
         catch {
             $entry.status = 'failed'
             $entry.reason = $_.Exception.Message
+            $entry.postMove = $null
             Add-Transaction $entry
         }
     }
