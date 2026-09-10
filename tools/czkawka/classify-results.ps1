@@ -26,7 +26,13 @@ $preferredDirectories = if ($null -ne $config) { @($config.scan.preferredDirecto
 function Test-PathMatch {
     param([string]$PathValue, [string[]]$Patterns)
     foreach ($pattern in $Patterns) {
-        if ($PathValue.StartsWith([string]$pattern, [StringComparison]::OrdinalIgnoreCase)) { return $true }
+        if ([string]::IsNullOrWhiteSpace([string]$pattern)) { continue }
+        $normalizedPattern = $pattern.TrimEnd('\', '/')
+        if ($PathValue.Equals($normalizedPattern, [StringComparison]::OrdinalIgnoreCase) -or
+            $PathValue.StartsWith($normalizedPattern + '\', [StringComparison]::OrdinalIgnoreCase) -or
+            $PathValue.StartsWith($normalizedPattern + '/', [StringComparison]::OrdinalIgnoreCase)) {
+            return $true
+        }
     }
     return $false
 }
@@ -49,12 +55,38 @@ function Get-NameQuality {
 }
 
 $itemsByPath = @{}
+$evidenceByPath = @{}
 $edges = @()
 foreach ($group in @($document.groups)) {
     $paths = @()
+    $groupEvidence = @()
     foreach ($entry in @($group.entries)) {
         $path = [string]$entry.path
         $paths += $path
+        $entryEvidence = [ordered]@{
+            sourceGroupId = [string]$group.groupId
+            source = [string](Get-Value $group 'source')
+            kind = [string](Get-Value $group 'kind')
+            sourceScan = [string](Get-Value $entry 'sourceScan')
+            groupId = [string](Get-Value $entry 'groupId')
+            path = $path
+            size = Get-Value $entry 'size'
+            modifiedTime = Get-Value $entry 'modifiedTime'
+            hash = Get-Value $entry 'hash'
+            width = Get-Value $entry 'width'
+            height = Get-Value $entry 'height'
+            perceptualDifference = Get-Value $entry 'perceptualDifference'
+            isReference = [bool](Get-Value $entry 'isReference')
+            referenceState = [string](Get-Value $entry 'referenceState')
+            warning = Get-Value $entry 'warning'
+            accessState = Get-Value $entry 'accessState'
+            error = Get-Value $entry 'error'
+            isStale = [bool](Get-Value $entry 'isStale')
+            staleReason = Get-Value $entry 'staleReason'
+        }
+        $groupEvidence += [pscustomobject]$entryEvidence
+        if (-not $evidenceByPath.ContainsKey($path)) { $evidenceByPath[$path] = @() }
+        $evidenceByPath[$path] += [pscustomobject]$entryEvidence
         if (-not $itemsByPath.ContainsKey($path)) {
             $itemsByPath[$path] = [ordered]@{
                 path = $path
@@ -66,7 +98,24 @@ foreach ($group in @($document.groups)) {
                 perceptualDifference = Get-Value $entry 'perceptualDifference'
                 isReference = [bool](Get-Value $entry 'isReference')
                 referenceState = [string](Get-Value $entry 'referenceState')
+                warning = Get-Value $entry 'warning'
+                accessState = [string](Get-Value $entry 'accessState')
+                error = Get-Value $entry 'error'
+                isStale = [bool](Get-Value $entry 'isStale')
+                staleReason = Get-Value $entry 'staleReason'
             }
+        }
+        else {
+            $item = $itemsByPath[$path]
+            foreach ($property in @('size', 'modifiedTime', 'hash', 'width', 'height', 'perceptualDifference', 'referenceState', 'warning', 'accessState', 'error', 'staleReason')) {
+                $current = $item[$property]
+                $incoming = Get-Value $entry $property
+                if (($null -eq $current -or [string]::IsNullOrWhiteSpace([string]$current)) -and $null -ne $incoming) {
+                    $item[$property] = $incoming
+                }
+            }
+            if ([bool](Get-Value $entry 'isReference')) { $item.isReference = $true }
+            if ([bool](Get-Value $entry 'isStale')) { $item.isStale = $true }
         }
     }
     $edges += [ordered]@{
@@ -74,6 +123,7 @@ foreach ($group in @($document.groups)) {
         source = [string](Get-Value $group 'source')
         kind = [string](Get-Value $group 'kind')
         paths = @($paths | Sort-Object -Unique)
+        entries = @($groupEvidence)
     }
 }
 
@@ -115,8 +165,8 @@ if ($paths.Count -gt 0) {
         $componentPaths = @($indexes | ForEach-Object { $paths[$_] } | Sort-Object)
         $componentItems = @($componentPaths | ForEach-Object { [pscustomobject]$itemsByPath[$_] })
         $componentEdges = @($edges | Where-Object { @($_.paths | Where-Object { $componentPaths -contains $_ }).Count -gt 0 })
-        $hashes = @($componentItems | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.hash) } | ForEach-Object { [string]$_.hash } | Sort-Object -Unique)
-        $hasMatchingHash = $hashes.Count -eq 1 -and @($componentItems | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.hash) }).Count -gt 1
+        $hashes = @($componentItems | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_.hash) } | ForEach-Object { [string]$_.hash.ToLowerInvariant() })
+        $hasMatchingHash = @($hashes | Group-Object | Where-Object Count -gt 1).Count -gt 0
         $hasExact = (@($componentEdges | Where-Object { $_.kind -eq 'duplicate' }).Count -gt 0) -or $hasMatchingHash
         $differences = @($componentItems | Where-Object { $null -ne $_.perceptualDifference } | ForEach-Object { [double]$_.perceptualDifference })
         $minimumDifference = if ($differences.Count -gt 0) { ($differences | Measure-Object -Minimum).Minimum } else { $null }
@@ -167,6 +217,12 @@ if ($paths.Count -gt 0) {
                     perceptualDifference = $_.perceptualDifference
                     isReference = $_.isReference
                     referenceState = $_.referenceState
+                    warning = $_.warning
+                    accessState = $_.accessState
+                    error = $_.error
+                    isStale = $_.isStale
+                    staleReason = $_.staleReason
+                    evidence = @($evidenceByPath[$_.path])
                     protected = ($_.isReference -or (Test-PathMatch $_.path $protectedPaths))
                     advisoryAction = if ($_.path -eq $suggestedPath) { 'keep' } elseif ($_.isReference -or (Test-PathMatch $_.path $protectedPaths)) { 'protect' } else { 'review' }
                 }

@@ -6,14 +6,14 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 80%**
+**Overall implementation: 84%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
 | 1 | Czkawka CLI foundation | Complete | 100% | None |
 | 2 | Stable local result model | Complete | 100% | Phase 1 |
 | 3 | Metadata date repair utility | Complete | 100% | Phase 2 |
-| 4 | Confidence and human grouping | In progress | 75% | Phases 2-3 |
+| 4 | Confidence and human grouping | Complete | 100% | Phases 2-3 |
 | 5 | Native Windows review experience | In progress | 85% | Phase 4 |
 | 6 | Safe remediation and undo | In progress | 60% | Phase 5 |
 | 7 | Operational polish | In progress | 40% | Phase 6 |
@@ -174,13 +174,14 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - Protected/reference paths cannot be recommended for removal.
 - Classifier output is stable for the same normalized input.
 
-**Status:** In progress, 75%
+**Status:** Complete, 100%
 
 **Agent update log:**
 
 - 2026-09-08: Added deterministic classifier grouping with transitive exact/image evidence, four confidence tiers, explainable labels, protected/reference safeguards, configurable advisory keep recommendations, and no-action output. Phase 4 tests passed under PowerShell 7.6.5.
 - 2026-09-08: Penalized numbered filename suffixes such as `(2)` and `(3)` so unsuffixed base names win deterministic tie-breaks when content and dimensions match. Phase 4 regression tests passed; the real `100_0095` group now recommends `100_0095.JPG`.
 - 2026-09-08: Audit correction: hash-driven confidence, label boundary behavior, complete evidence retention, and broader threshold/path test matrices remain incomplete.
+- 2026-09-10: Completed the remaining Phase 4 gaps. Matching hashes now drive Very high confidence case-insensitively; repeated paths merge missing metadata while retaining per-entry evidence, warnings, access, and stale fields; protected/preferred path matching requires a directory boundary; and Phase 4 tests cover hash, perceptual thresholds, dimension-ratio boundaries, and protected-path matrices. `phase4-tests.ps1` and `phase2-tests.ps1` passed under PowerShell 7.6.5. Phase 5 was not advanced.
 
 ## Phase 5: Native Windows Review Experience
 
