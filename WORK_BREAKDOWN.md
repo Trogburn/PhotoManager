@@ -279,6 +279,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - 2026-09-08: Added `USER_GUIDE.md` with copy-paste commands, safety checkpoints, troubleshooting, recovery, and a beginner workflow. Added `run-workflow.ps1` to scan, normalize, classify, optionally produce date review, and open the reviewer in one safe command. Wrapper syntax and Phase 1-6 validation passed. Remaining Phase 7 work includes checksum/update guidance, attribution, scheduling guidance, and final end-to-end validation against an installed CLI.
 - 2026-09-08: Synchronized completed Phase 5 and Phase 6 deliverable checkboxes with their 100% statuses and marked the completed Phase 7 documentation/check-validation deliverables.
 - 2026-09-10: Completed Phase 7 operational polish. Added explicit version/URL/SHA256 update instructions requiring `-Force`, third-party Czkawka attribution, scan/report-only Task Scheduler guidance, a deterministic all-phase validation runner, and a safe local end-to-end Phase 7 test. `run-workflow.ps1` now requires explicit `-AllowLocalRoot` for local fixture validation and otherwise preserves UNC-root safety. Full validation is intended to run via `tests/run-all-tests.ps1`; no delivery phase was advanced.
+- 2026-09-10: Stopped tracking generated `tools/czkawka/tests/temp/` outputs. The directory remains ignored so local parser test runs do not create repository changes; the local files were preserved.
 
 ## Future Decisions
 
