@@ -6,7 +6,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 
 ## Overall Status
 
-**Overall implementation: 91%**
+**Overall implementation: 100%**
 
 | Phase | Scope | Status | Progress | Depends On |
 |---|---|---:|---:|---|
@@ -16,7 +16,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 | 4 | Confidence and human grouping | Complete | 100% | Phases 2-3 |
 | 5 | Native Windows review experience | Complete | 100% | Phase 4 |
 | 6 | Safe remediation and undo | Complete | 100% | Phase 5 |
-| 7 | Operational polish | In progress | 40% | Phase 6 |
+| 7 | Operational polish | Complete | 100% | Phase 6 |
 
 ### Status Definitions
 
@@ -257,11 +257,11 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 **Deliverables**
 
 - [x] Update `README.md` with installation, configuration, UNC permissions, scan/review/remediation, supported formats, cache behavior, and recovery.
-- [ ] Add version/checksum update guidance without silent executable replacement.
-- [ ] Document third-party binary/license attribution.
-- [ ] Add optional Task Scheduler guidance only for scan/report jobs.
-- [ ] Ensure scheduled jobs never quarantine automatically.
-- [x] Add final PowerShell syntax, parser, classifier, date-repair, review, and remediation checks.
+- [x] Add version/checksum update guidance without silent executable replacement.
+- [x] Document third-party binary/license attribution.
+- [x] Add optional Task Scheduler guidance only for scan/report jobs.
+- [x] Ensure scheduled jobs never quarantine automatically.
+- [x] Add final PowerShell syntax, parser, classifier, date-repair, review, remediation, and safe end-to-end checks.
 - [x] Add or update `.gitignore` for runtime reports, caches, and local configuration secrets.
 
 **Acceptance checks**
@@ -272,12 +272,13 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - Runtime artifacts are not accidentally committed.
 - All automated checks pass.
 
-**Status:** In progress, 40%
+**Status:** Complete, 100%
 
 **Agent update log:**
 
 - 2026-09-08: Added `USER_GUIDE.md` with copy-paste commands, safety checkpoints, troubleshooting, recovery, and a beginner workflow. Added `run-workflow.ps1` to scan, normalize, classify, optionally produce date review, and open the reviewer in one safe command. Wrapper syntax and Phase 1-6 validation passed. Remaining Phase 7 work includes checksum/update guidance, attribution, scheduling guidance, and final end-to-end validation against an installed CLI.
 - 2026-09-08: Synchronized completed Phase 5 and Phase 6 deliverable checkboxes with their 100% statuses and marked the completed Phase 7 documentation/check-validation deliverables.
+- 2026-09-10: Completed Phase 7 operational polish. Added explicit version/URL/SHA256 update instructions requiring `-Force`, third-party Czkawka attribution, scan/report-only Task Scheduler guidance, a deterministic all-phase validation runner, and a safe local end-to-end Phase 7 test. `run-workflow.ps1` now requires explicit `-AllowLocalRoot` for local fixture validation and otherwise preserves UNC-root safety. Full validation is intended to run via `tests/run-all-tests.ps1`; no delivery phase was advanced.
 
 ## Future Decisions
 

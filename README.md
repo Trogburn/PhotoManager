@@ -23,6 +23,8 @@ This repository now includes a pinned Windows installation and read-only scan wo
 - `tools/czkawka/run-workflow.ps1` - Runs scan, normalization, classification, optional date review, and reviewer launch as one safe workflow.
 - `tools/czkawka/remediate.ps1` - Dry-run-first quarantine workflow with stale-file checks, transaction logging, and guarded undo.
 - `tools/czkawka/tests/phase6-tests.ps1` - Validates remediation safety against temporary files.
+- `tools/czkawka/tests/phase7-tests.ps1` - Validates operational documentation and a safe local end-to-end workflow.
+- `tools/czkawka/tests/run-all-tests.ps1` - Runs every phase validation script in order.
 - `.gitignore` - Keeps generated reports and local config artifacts out of source control.
 
 ### Commands
@@ -69,10 +71,32 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\remediate.
 # Apply explicitly requested quarantine actions, then undo if needed
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\remediate.ps1 -InputPath .\reports\czkawka\classified.json -DecisionPath .\reports\review\decisions.json -QuarantineRoot .\reports\quarantine -Apply
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\remediate.ps1 -DecisionPath .\reports\review\decisions.json -TransactionManifestPath .\reports\quarantine\transactions.jsonl -Undo
+
+# Run all automated phase checks, including the safe local end-to-end workflow
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\run-all-tests.ps1
 ```
 
 ### Configuration
 The checked-in `tools/czkawka/config.json` uses repository-relative local paths and obvious `YOUR-SERVER`/`YOUR-SHARE` UNC placeholders. Replace those UNC values with the actual share and protected/preferred folders before scanning. The local executable is installed under `tools/czkawka/bin`, and reports are written under `reports/czkawka`. The Czkawka 12.0.1 Windows CLI URL and SHA256 checksum are pinned in that config; `install.ps1` reads them by default.
+
+### Updating the pinned CLI safely
+
+The installer is deliberately pinned and does not silently replace an existing executable. To update Czkawka, choose a release, obtain its official Windows CLI URL and published SHA256 from the Czkawka release page, then update `czkawka.version`, `czkawka.downloadUrl`, and `czkawka.checksum` together in `tools/czkawka/config.json`. Review the diff and verify the checksum independently before running:
+
+```powershell
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\install.ps1 -Force
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\run-all-tests.ps1
+```
+
+`-Force` is required to replace an installed binary. Do not use `-SkipChecksum` for a real update, replace the executable manually, or accept a release without a matching pinned checksum. Keep the old version/checksum in version control until validation passes.
+
+### Third-party attribution
+
+This project distributes no Czkawka source code. It downloads the unchanged Windows CLI release from the official [Czkawka GitHub releases](https://github.com/qarmin/czkawka/releases), currently pinned to 12.0.1 by URL and SHA256 in `tools/czkawka/config.json`. Czkawka is third-party software; review its upstream repository and included release license/notices for the applicable license terms before redistributing the binary. The PowerShell orchestration in this repository remains separate from Czkawka.
+
+### Optional scheduled scan/report
+
+Task Scheduler is optional and must run only the read-only scan/report path. Configure a task to invoke PowerShell with `tools/czkawka\run-workflow.ps1 -ScanRoot "\\server\photos" -ExportOnly`, using an account with read access to the share and write access to the local reports folder. Do not add `remediate.ps1`, `-Apply`, date-repair apply commands, reviewer decisions, or a quarantine path to a scheduled task. This scheduled command only creates scan, normalized, classified, and review report artifacts: it cannot quarantine files, delete files, rename files, or change timestamps.
 
 ### Safety notes
 - Production scans should use a UNC root. Local directories are allowed only with `-AllowLocalRoot` for fixture validation. Missing executables, missing shares, and invalid Czkawka arguments fail before files are changed.

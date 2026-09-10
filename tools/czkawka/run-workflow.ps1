@@ -13,7 +13,10 @@ param(
     [switch]$IncludeDateReview,
 
     [Parameter()]
-    [switch]$ExportOnly
+    [switch]$ExportOnly,
+
+    [Parameter()]
+    [switch]$AllowLocalRoot
 )
 
 Set-StrictMode -Version Latest
@@ -31,7 +34,7 @@ if ([string]::IsNullOrWhiteSpace($effectiveRoot) -or $effectiveRoot -like '*YOUR
 Push-Location $repositoryRoot
 try {
     $reportRoot = [IO.Path]::GetFullPath([string]$config.scan.localReportRoot)
-    $scanResult = & (Join-Path $PSScriptRoot 'scan.ps1') -ConfigPath $configFullPath -ScanRoot $effectiveRoot -Fresh:$Fresh
+    $scanResult = & (Join-Path $PSScriptRoot 'scan.ps1') -ConfigPath $configFullPath -ScanRoot $effectiveRoot -Fresh:$Fresh -AllowLocalRoot:$AllowLocalRoot
     $scanDirectoryPath = [string]$scanResult.reportDir
     if ([string]::IsNullOrWhiteSpace($scanDirectoryPath) -or -not (Test-Path -LiteralPath $scanDirectoryPath)) {
         throw "Scan completed but no report directory was found under $reportRoot."
@@ -49,19 +52,27 @@ try {
     }
 
     $htmlPath = Join-Path $scanDirectoryPath 'review.html'
+    $jsonPath = Join-Path $scanDirectoryPath 'review.json'
     $decisionPath = Join-Path $scanDirectoryPath 'decisions.json'
-    $reviewArgs = @('-InputPath', $classifiedPath, '-DecisionPath', $decisionPath, '-HtmlReportPath', $htmlPath)
-    if ($dateReviewPath) { $reviewArgs += @('-DateReviewPath', $dateReviewPath) }
-    if ($ExportOnly) { $reviewArgs += '-ExportOnly' }
-    & (Join-Path $PSScriptRoot 'review.ps1') @reviewArgs
+    $reviewParams = @{
+        InputPath = $classifiedPath
+        DecisionPath = $decisionPath
+        HtmlReportPath = $htmlPath
+        JsonReportPath = $jsonPath
+        ExportOnly = $ExportOnly.IsPresent
+    }
+    if ($dateReviewPath) { $reviewParams.DateReviewPath = $dateReviewPath }
+    & (Join-Path $PSScriptRoot 'review.ps1') @reviewParams | Out-Null
 
     [pscustomobject]@{
         scanDirectory = $scanDirectoryPath
         classifiedPath = $classifiedPath
         decisionPath = $decisionPath
         htmlReportPath = $htmlPath
+        jsonReportPath = $jsonPath
         dateReviewPath = $dateReviewPath
         exportOnly = $ExportOnly.IsPresent
+        allowLocalRoot = $AllowLocalRoot.IsPresent
     }
 }
 finally {
