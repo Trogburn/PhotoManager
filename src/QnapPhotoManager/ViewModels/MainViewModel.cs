@@ -86,6 +86,7 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
     public RelayCommand ResetCommand { get; }
     public RelayCommand ReturnToConfigurationCommand { get; }
     public RelayCommand StartDateWorkCommand => DateWork.StartDateWorkCommand;
+    public RelayCommand ContinueDateWorkCommand => DateWork.ContinueDateWorkCommand;
     public RelayCommand ScanDatesCommand => DateWork.ScanDatesCommand;
     public RelayCommand CreateDateSnapshotCommand => DateWork.CreateDateSnapshotCommand;
     public RelayCommand ApplyDatesCommand => DateWork.ApplyDatesCommand;
@@ -222,20 +223,28 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
     internal void MarkDateScanInProgressForTests() =>
         DateWork.MarkDateScanInProgressForTests();
 
-    internal void PrepareFinishedDuplicateSessionForTests()
+    internal void PrepareReviewingDuplicateSessionForTests()
     {
         _workflow.TransitionTo(Models.WorkflowState.Configured);
         _workflow.TransitionTo(Models.WorkflowState.Scanning);
         _workflow.TransitionTo(Models.WorkflowState.ScanReady);
         _workflow.TransitionTo(Models.WorkflowState.Reviewing);
-        _workflow.TransitionTo(Models.WorkflowState.RemediationReady);
-        _workflow.TransitionTo(Models.WorkflowState.RemediationApplied);
         DuplicateWork.MarkConfiguredForTests(new AppConfig
         {
             ScanRoot = ScanRoot,
             QuarantineRoot = QuarantineRoot,
             ArtifactRoot = ArtifactRoot
         });
+        ((IShellWorkflowHost)this).Navigate(WorkflowPage.Configuration);
+        ((IShellWorkflowHost)this).RefreshSession();
+        ((IShellWorkflowHost)this).RaiseCommandStates();
+    }
+
+    internal void PrepareFinishedDuplicateSessionForTests()
+    {
+        PrepareReviewingDuplicateSessionForTests();
+        _workflow.TransitionTo(Models.WorkflowState.RemediationReady);
+        _workflow.TransitionTo(Models.WorkflowState.RemediationApplied);
         ((IShellWorkflowHost)this).Navigate(WorkflowPage.Configuration);
         ((IShellWorkflowHost)this).RefreshSession();
         ((IShellWorkflowHost)this).RaiseCommandStates();

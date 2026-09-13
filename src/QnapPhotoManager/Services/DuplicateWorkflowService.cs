@@ -81,7 +81,12 @@ public sealed class DuplicateWorkflowService
         bool fresh,
         CancellationToken cancellationToken = default)
     {
-        RequireState(workflow, WorkflowState.Configured);
+        if (workflow.Session.State is not (WorkflowState.Configured or WorkflowState.DateReviewReady))
+        {
+            throw new InvalidOperationException(
+                $"Workflow must be {WorkflowState.Configured} or {WorkflowState.DateReviewReady} to start a duplicate scan.");
+        }
+
         workflow.TransitionTo(WorkflowState.Scanning, "Starting read-only Czkawka scan.");
         var started = DateTime.UtcNow;
         await RunScriptAsync("scan.ps1", Args(("-ScanRoot", config.ScanRoot), ("-ConfigPath", ConfigPath()), fresh ? ("-Fresh", null) : null), cancellationToken);

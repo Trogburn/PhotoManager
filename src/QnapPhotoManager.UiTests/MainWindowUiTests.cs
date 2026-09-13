@@ -27,6 +27,7 @@ public sealed class MainWindowUiTests
             Assert.Null(window.FindFirstDescendant(condition =>
                 condition.ByAutomationId("DateWorkPage")));
             Assert.True(Find(window, "StartDateWorkButton").IsEnabled);
+            Assert.False(Find(window, "ContinueDateWorkButton").IsEnabled);
             Assert.True(Find(window, "ConfigureDuplicatesButton").IsEnabled);
         }
         finally

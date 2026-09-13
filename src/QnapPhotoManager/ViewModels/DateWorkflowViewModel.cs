@@ -32,6 +32,7 @@ public sealed class DateWorkflowViewModel : ObservableObject
         _dateRepair = dateRepair ?? throw new ArgumentNullException(nameof(dateRepair));
         _host = host ?? throw new ArgumentNullException(nameof(host));
         StartDateWorkCommand = new RelayCommand(StartDateWork, CanStartDateWork);
+        ContinueDateWorkCommand = new RelayCommand(ContinueDateWork, CanContinueDateWork);
         ScanDatesCommand = new RelayCommand(ScanDates, CanScanDates);
         CreateDateSnapshotCommand = new RelayCommand(CreateDateSnapshot, CanCreateDateSnapshot);
         ApplyDatesCommand = new RelayCommand(ApplyDates, CanApplyDates);
@@ -42,6 +43,7 @@ public sealed class DateWorkflowViewModel : ObservableObject
     }
 
     public RelayCommand StartDateWorkCommand { get; }
+    public RelayCommand ContinueDateWorkCommand { get; }
     public RelayCommand ScanDatesCommand { get; }
     public RelayCommand CreateDateSnapshotCommand { get; }
     public RelayCommand ApplyDatesCommand { get; }
@@ -133,6 +135,7 @@ public sealed class DateWorkflowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanConfirmDateSnapshot));
         RefreshDateBulkApproveGroups();
         StartDateWorkCommand.RaiseCanExecuteChanged();
+        ContinueDateWorkCommand.RaiseCanExecuteChanged();
         ScanDatesCommand.RaiseCanExecuteChanged();
         CreateDateSnapshotCommand.RaiseCanExecuteChanged();
         ApplyDatesCommand.RaiseCanExecuteChanged();
@@ -496,13 +499,27 @@ public sealed class DateWorkflowViewModel : ObservableObject
         _ => 4
     };
 
+    private void ContinueDateWork()
+    {
+        _host.Navigate(WorkflowPage.DateWork);
+        _host.SetStatus("Returned to date work.");
+        _host.RaiseCommandStates();
+    }
+
     private bool CanStartDateWork() =>
-        _host.CurrentPage == WorkflowPage.Configuration
-        && (
-            _dateWorkStarted
-            || _host.Workflow.Session.State is WorkflowState.Idle
-                or WorkflowState.RemediationApplied
-                or WorkflowState.Completed);
+        !_dateWorkStarted
+        && _host.CurrentPage == WorkflowPage.Configuration
+        && _host.Workflow.Session.State is WorkflowState.Idle
+            or WorkflowState.Configured
+            or WorkflowState.ScanReady
+            or WorkflowState.Reviewing
+            or WorkflowState.DateReviewReady
+            or WorkflowState.RemediationApplied
+            or WorkflowState.Completed;
+
+    private bool CanContinueDateWork() =>
+        _dateWorkStarted
+        && _host.CurrentPage == WorkflowPage.Configuration;
 
     private bool CanScanDates() =>
         _host.CurrentPage == WorkflowPage.DateWork
