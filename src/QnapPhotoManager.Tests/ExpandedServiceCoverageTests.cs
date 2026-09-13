@@ -270,9 +270,99 @@ public sealed class DateRepairServiceCoverageTests : TestBase
             var entries = await service.ReadUndoEntriesAsync(manifest);
             Assert.Single(entries);
             Assert.True(entries[0].VerificationPassed);
+            Assert.Empty(await service.ReadActiveUndoEntriesAsync(manifest));
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 service.UndoAsync(manifest, [], "artifacts"));
             Assert.Empty(await service.ReadUndoEntriesAsync(Path.Combine(root, "missing.jsonl")));
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void UndoSelectionManifestIsSingleLineJson()
+    {
+        var entry = new DateUndoEntry(
+            @"\\server\share\photo.jpg",
+            DateTimeOffset.Parse("2026-09-13T06:57:59.3736944Z"),
+            DateTimeOffset.Parse("2026-09-13T07:30:01.4553407Z"),
+            DateTimeOffset.Parse("2026-01-01T06:00:00.0000000Z"),
+            DateTimeOffset.Parse("2026-09-13T07:30:01.4553407Z"),
+            true);
+
+        var line = DateRepairService.FormatUndoManifestLine(entry);
+
+        Assert.DoesNotContain('\n', line);
+        Assert.DoesNotContain('\r', line);
+        using var document = JsonDocument.Parse(line);
+        Assert.Equal(entry.Path, document.RootElement.GetProperty("path").GetString());
+        Assert.True(document.RootElement.GetProperty("verificationPassed").GetBoolean());
+    }
+
+    [Fact]
+    public async Task SelectiveUndoRestoresOnlyCheckedFileFromJsonlManifest()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var photo = Path.Combine(root, "keep.jpg");
+            await File.WriteAllBytesAsync(photo, [0xFF, 0xD8, 0xFF, 0xD9]);
+            var beforeCreation = new DateTime(2026, 9, 13, 6, 57, 59, DateTimeKind.Utc);
+            var afterCreation = new DateTime(2026, 1, 1, 6, 0, 0, DateTimeKind.Utc);
+            var writeTime = new DateTime(2026, 9, 13, 7, 30, 1, DateTimeKind.Utc);
+            File.SetCreationTimeUtc(photo, afterCreation);
+            File.SetLastWriteTimeUtc(photo, writeTime);
+
+            var manifest = Path.Combine(root, "undo.jsonl");
+            var entry = new DateUndoEntry(
+                photo,
+                new DateTimeOffset(beforeCreation),
+                new DateTimeOffset(writeTime),
+                new DateTimeOffset(afterCreation),
+                new DateTimeOffset(writeTime),
+                true);
+            await File.WriteAllTextAsync(manifest, DateRepairService.FormatUndoManifestLine(entry) + Environment.NewLine);
+
+            var service = new DateRepairService(new PathPolicy(root));
+            Assert.Single(await service.ReadActiveUndoEntriesAsync(manifest));
+            await service.UndoAsync(manifest, [photo], Path.Combine(root, "artifacts"));
+
+            Assert.Equal(beforeCreation, File.GetCreationTimeUtc(photo), TimeSpan.FromSeconds(1));
+            Assert.Equal(writeTime, File.GetLastWriteTimeUtc(photo), TimeSpan.FromSeconds(1));
+            Assert.Empty(await service.ReadActiveUndoEntriesAsync(manifest));
+            Assert.Single(await service.ReadUndoEntriesAsync(manifest));
+            var evidence = DateRepairService.ReadContentEvidence(photo);
+            Assert.Equal(4, evidence.Size);
+            Assert.False(string.IsNullOrWhiteSpace(evidence.Sha256));
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void UndoneTimestampValidationRequiresRestoredTimes()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var photo = Path.Combine(root, "keep.jpg");
+            File.WriteAllBytes(photo, [0xFF, 0xD8, 0xFF, 0xD9]);
+            var beforeCreation = new DateTime(2026, 9, 13, 6, 57, 59, DateTimeKind.Utc);
+            var writeTime = new DateTime(2026, 9, 13, 7, 30, 1, DateTimeKind.Utc);
+            File.SetCreationTimeUtc(photo, beforeCreation);
+            File.SetLastWriteTimeUtc(photo, writeTime);
+            var entry = new DateUndoEntry(
+                photo,
+                new DateTimeOffset(beforeCreation),
+                new DateTimeOffset(writeTime),
+                DateTimeOffset.Parse("2026-01-01T06:00:00Z"),
+                new DateTimeOffset(writeTime),
+                true);
+
+            DateRepairService.ValidateUndoneTimestamps([entry]);
+
+            File.SetCreationTimeUtc(photo, new DateTime(2026, 1, 1, 6, 0, 0, DateTimeKind.Utc));
+            var error = Assert.Throws<IOException>(() =>
+                DateRepairService.ValidateUndoneTimestamps([entry]));
+            Assert.Contains("creation time was not restored", error.Message, StringComparison.Ordinal);
         }
         finally { Delete(root); }
     }
@@ -299,6 +389,42 @@ public sealed class DateRepairServiceCoverageTests : TestBase
             var service = new DateRepairService(new PathPolicy(root));
             var path = service.GetUndoManifestPath("artifacts");
             Assert.Equal(Path.Combine(root, "artifacts", "dates", "date-undo.jsonl"), path);
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void AppliedTimestampValidationRequiresProposedCreationTime()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var photo = Path.Combine(root, "keep.jpg");
+            File.WriteAllBytes(photo, [0xFF, 0xD8, 0xFF, 0xD9]);
+            var proposed = new DateTime(2026, 1, 1, 6, 0, 0, DateTimeKind.Utc);
+            File.SetCreationTimeUtc(photo, proposed);
+
+            var report = new DateReviewReport
+            {
+                Policy = "CreationTimeOnly",
+                Items =
+                [
+                    new DateReviewItem
+                    {
+                        Path = photo,
+                        Status = "Proposed",
+                        ProposedCaptureTimeUtc = "2026-01-01T06:00:00Z"
+                    }
+                ]
+            };
+            var decisions = new[] { new DateDecision(photo, "approve") };
+
+            DateRepairService.ValidateAppliedTimestamps(report, decisions);
+
+            File.SetCreationTimeUtc(photo, new DateTime(2026, 9, 13, 7, 51, 0, DateTimeKind.Utc));
+            var error = Assert.Throws<IOException>(() =>
+                DateRepairService.ValidateAppliedTimestamps(report, decisions));
+            Assert.Contains("creation time was not set to the proposed date", error.Message, StringComparison.Ordinal);
         }
         finally { Delete(root); }
     }

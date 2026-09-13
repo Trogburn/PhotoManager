@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.ComponentModel;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -14,6 +15,14 @@ public sealed class DateRepairService(PathPolicy pathPolicy)
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
+
+    private static readonly JsonSerializerOptions JsonlOptions = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    private static readonly Encoding Utf8NoBom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
     private readonly PathPolicy _pathPolicy =
         pathPolicy ?? throw new ArgumentNullException(nameof(pathPolicy));
@@ -130,6 +139,8 @@ public sealed class DateRepairService(PathPolicy pathPolicy)
             throw new IOException("Date apply completed with a failed verification report.");
         }
 
+        ValidateAppliedTimestamps(report, decisions);
+
         return new DateApplyResult(
             reviewPath, decisionPath, verificationPath, undoPath, appliedCount, passed);
     }
@@ -167,6 +178,18 @@ public sealed class DateRepairService(PathPolicy pathPolicy)
         return entries;
     }
 
+    public async Task<IReadOnlyList<DateUndoEntry>> ReadActiveUndoEntriesAsync(
+        string manifestPath,
+        CancellationToken cancellationToken = default)
+    {
+        var entries = await ReadUndoEntriesAsync(manifestPath, cancellationToken);
+        return entries
+            .GroupBy(entry => Path.GetFullPath(entry.Path), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Last())
+            .Where(IsStillApplied)
+            .ToArray();
+    }
+
     public async Task UndoAsync(
         string manifestPath,
         IReadOnlyCollection<string> selectedPaths,
@@ -176,33 +199,25 @@ public sealed class DateRepairService(PathPolicy pathPolicy)
         var selected = selectedPaths
             .Select(Path.GetFullPath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var entries = await ReadUndoEntriesAsync(manifestPath, cancellationToken);
-        var selectedEntries = entries
+        var selectedEntries = (await ReadActiveUndoEntriesAsync(manifestPath, cancellationToken))
             .Where(entry => selected.Contains(Path.GetFullPath(entry.Path)))
-            .GroupBy(entry => Path.GetFullPath(entry.Path), StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.Last())
             .ToArray();
         if (selectedEntries.Length == 0)
         {
             throw new InvalidOperationException("Select at least one applied file to undo.");
         }
 
+        var contentBefore = selectedEntries.ToDictionary(
+            entry => Path.GetFullPath(entry.Path),
+            entry => ReadContentEvidence(entry.Path),
+            StringComparer.OrdinalIgnoreCase);
         var temporaryManifest = ResolveArtifact(
             artifactRoot, "dates", $"date-undo-selection-{Guid.NewGuid():N}.jsonl");
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(temporaryManifest)!);
-            var lines = selectedEntries.Select(entry => JsonSerializer.Serialize(
-                new
-                {
-                    path = entry.Path,
-                    beforeCreationTimeUtc = entry.BeforeCreationTimeUtc.ToString("o"),
-                    beforeLastWriteTimeUtc = entry.BeforeLastWriteTimeUtc.ToString("o"),
-                    afterCreationTimeUtc = entry.AfterCreationTimeUtc.ToString("o"),
-                    afterLastWriteTimeUtc = entry.AfterLastWriteTimeUtc.ToString("o"),
-                    verificationPassed = entry.VerificationPassed
-                }, JsonOptions));
-            await File.WriteAllLinesAsync(temporaryManifest, lines, Encoding.UTF8, cancellationToken);
+            var lines = selectedEntries.Select(FormatUndoManifestLine);
+            await File.WriteAllLinesAsync(temporaryManifest, lines, Utf8NoBom, cancellationToken);
             await RunPowerShellAsync(
                 [
                     "-File", FindScript(),
@@ -218,6 +233,18 @@ public sealed class DateRepairService(PathPolicy pathPolicy)
                 File.Delete(temporaryManifest);
             }
         }
+
+        ValidateUndoneTimestamps(selectedEntries);
+        foreach (var entry in selectedEntries)
+        {
+            var after = ReadContentEvidence(entry.Path);
+            var before = contentBefore[Path.GetFullPath(entry.Path)];
+            if (after.Size != before.Size
+                || !string.Equals(after.Sha256, before.Sha256, StringComparison.Ordinal))
+            {
+                throw new IOException($"Undo verification failed; file content changed: {entry.Path}");
+            }
+        }
     }
 
     public static bool IsApplyCandidate(DateReviewItem item) =>
@@ -226,6 +253,92 @@ public sealed class DateRepairService(PathPolicy pathPolicy)
 
     public string GetUndoManifestPath(string artifactRoot) =>
         ResolveArtifact(artifactRoot, "dates", "date-undo.jsonl");
+
+    internal static void ValidateUndoneTimestamps(IReadOnlyCollection<DateUndoEntry> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        foreach (var entry in entries)
+        {
+            var file = new FileInfo(entry.Path);
+            if (!file.Exists)
+            {
+                throw new IOException($"Undo verification failed; file is missing: {entry.Path}");
+            }
+
+            if (!NearlyEqual(file.CreationTimeUtc, entry.BeforeCreationTimeUtc.UtcDateTime))
+            {
+                throw new IOException(
+                    $"Undo verification failed; creation time was not restored: {entry.Path}");
+            }
+
+            if (!NearlyEqual(file.LastWriteTimeUtc, entry.BeforeLastWriteTimeUtc.UtcDateTime))
+            {
+                throw new IOException(
+                    $"Undo verification failed; last-write time was not restored: {entry.Path}");
+            }
+        }
+    }
+
+    internal static FileContentEvidence ReadContentEvidence(string path)
+    {
+        var info = new FileInfo(path);
+        if (!info.Exists)
+        {
+            throw new IOException($"File is missing: {path}");
+        }
+
+        using var stream = info.OpenRead();
+        var hash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        return new FileContentEvidence(info.Length, hash);
+    }
+
+    internal static void ValidateAppliedTimestamps(
+        DateReviewReport report,
+        IReadOnlyCollection<DateDecision> decisions)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        ArgumentNullException.ThrowIfNull(decisions);
+        var approved = decisions
+            .Where(decision =>
+                string.Equals(decision.Action, "approve", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(decision.Action, "manual", StringComparison.OrdinalIgnoreCase))
+            .Select(decision => Path.GetFullPath(decision.Path))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var requireLastWrite = string.Equals(
+            report.Policy, "CreationAndLastWriteTime", StringComparison.OrdinalIgnoreCase);
+
+        foreach (var item in report.Items)
+        {
+            if (!approved.Contains(Path.GetFullPath(item.Path)))
+            {
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(item.ProposedCaptureTimeUtc))
+            {
+                throw new IOException($"Apply verification failed; no proposed date: {item.Path}");
+            }
+
+            var file = new FileInfo(item.Path);
+            if (!file.Exists)
+            {
+                throw new IOException($"Apply verification failed; file is missing: {item.Path}");
+            }
+
+            var proposed = ParseUtc(item.ProposedCaptureTimeUtc);
+            if (!NearlyEqual(file.CreationTimeUtc, proposed))
+            {
+                throw new IOException(
+                    $"Apply verification failed; creation time was not set to the proposed date: {item.Path}");
+            }
+
+            if (requireLastWrite && !NearlyEqual(file.LastWriteTimeUtc, proposed))
+            {
+                throw new IOException(
+                    $"Apply verification failed; last-write time was not set to the proposed date: {item.Path}");
+            }
+        }
+    }
 
     private void ValidateSnapshot(DateSnapshot snapshot)
     {
@@ -335,11 +448,41 @@ public sealed class DateRepairService(PathPolicy pathPolicy)
             "Neither pwsh nor Windows PowerShell could be started.", lastStartException);
     }
 
+    internal static string FormatUndoManifestLine(DateUndoEntry entry) =>
+        JsonSerializer.Serialize(
+            new
+            {
+                path = entry.Path,
+                beforeCreationTimeUtc = entry.BeforeCreationTimeUtc.ToString("o"),
+                beforeLastWriteTimeUtc = entry.BeforeLastWriteTimeUtc.ToString("o"),
+                afterCreationTimeUtc = entry.AfterCreationTimeUtc.ToString("o"),
+                afterLastWriteTimeUtc = entry.AfterLastWriteTimeUtc.ToString("o"),
+                verificationPassed = entry.VerificationPassed
+            },
+            JsonlOptions);
+
+    private static bool IsStillApplied(DateUndoEntry entry)
+    {
+        try
+        {
+            var file = new FileInfo(entry.Path);
+            return file.Exists
+                && NearlyEqual(file.CreationTimeUtc, entry.AfterCreationTimeUtc.UtcDateTime)
+                && NearlyEqual(file.LastWriteTimeUtc, entry.AfterLastWriteTimeUtc.UtcDateTime);
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+    }
+
     private static DateTime ParseUtc(string value) =>
         DateTime.Parse(value, null, System.Globalization.DateTimeStyles.RoundtripKind).ToUniversalTime();
 
     private static bool NearlyEqual(DateTime actual, DateTime expected) =>
         Math.Abs((actual.ToUniversalTime() - expected.ToUniversalTime()).TotalSeconds) <= 1;
+
+    internal readonly record struct FileContentEvidence(long Size, string Sha256);
 
     private sealed class ManifestEntry
     {

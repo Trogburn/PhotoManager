@@ -16,13 +16,20 @@ try {
         throw 'Date review report is missing timezonePolicy for the WPF reviewer.'
     }
     $item = @($report.items) | Select-Object -First 1
-    foreach ($name in @('rawValue', 'parsedFilenameToken', 'timezoneKind', 'timezoneOffset', 'reason', 'currentCreationTimeUtc', 'currentLastWriteTimeUtc', 'proposedCaptureTimeUtc', 'source', 'confidence', 'status', 'policy')) {
+    foreach ($name in @('rawValue', 'parsedFilenameToken', 'timezoneKind', 'timezoneOffset', 'reason', 'currentCreationTimeUtc', 'currentLastWriteTimeUtc', 'proposedCaptureTimeUtc', 'source', 'confidence', 'status', 'policy', 'evidenceComparison', 'decisionSummary')) {
         if (-not $item.PSObject.Properties.Name.Contains($name)) {
             throw "Date review item is missing reviewer field '$name'."
         }
     }
     if ($item.status -ne 'Proposed' -or $item.source -ne 'filename' -or $item.parsedFilenameToken -ne '2026-01-01') {
         throw "Filename evidence was not exposed for the reviewer. status=$($item.status) source=$($item.source) token=$($item.parsedFilenameToken)"
+    }
+    if ($item.decisionSummary -notlike '*Filename has a date*' -or $item.decisionSummary -notlike '*EXIF does not*') {
+        throw "Decision summary did not highlight filename vs EXIF. summary=$($item.decisionSummary)"
+    }
+    $labels = @($item.evidenceComparison | ForEach-Object label)
+    if ($labels -notcontains 'EXIF' -or $labels -notcontains 'Filename' -or $labels -notcontains 'Filesystem') {
+        throw "Evidence comparison is missing a required source row."
     }
 }
 finally {

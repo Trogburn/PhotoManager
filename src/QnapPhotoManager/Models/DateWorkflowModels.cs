@@ -69,6 +69,27 @@ public sealed class DateReviewItem
 
     [JsonPropertyName("policy")]
     public string Policy { get; init; } = string.Empty;
+
+    [JsonPropertyName("decisionSummary")]
+    public string? DecisionSummary { get; init; }
+
+    [JsonPropertyName("evidenceComparison")]
+    public List<DateEvidenceComparison> EvidenceComparison { get; init; } = [];
+}
+
+public sealed class DateEvidenceComparison
+{
+    [JsonPropertyName("label")]
+    public string Label { get; init; } = string.Empty;
+
+    [JsonPropertyName("state")]
+    public string State { get; init; } = string.Empty;
+
+    [JsonPropertyName("detail")]
+    public string Detail { get; init; } = string.Empty;
+
+    [JsonPropertyName("selected")]
+    public bool Selected { get; init; }
 }
 
 public sealed record DateSnapshot(

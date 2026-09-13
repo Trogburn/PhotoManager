@@ -59,6 +59,36 @@ function Get-PropertyValue {
     return $Value.PSObject.Properties[$Name].Value
 }
 
+function Read-JsonlEntries {
+    param([string]$LiteralPath)
+
+    $entries = @()
+    $buffer = New-Object System.Text.StringBuilder
+    foreach ($line in Get-Content -LiteralPath $LiteralPath) {
+        if ([string]::IsNullOrWhiteSpace($line)) {
+            continue
+        }
+
+        [void]$buffer.AppendLine($line)
+        try {
+            $parsed = $buffer.ToString() | ConvertFrom-Json -ErrorAction Stop
+            if ($null -ne $parsed) {
+                $entries += $parsed
+                [void]$buffer.Clear()
+            }
+        }
+        catch {
+            # Incomplete JSON object; keep buffering until the closing brace arrives.
+        }
+    }
+
+    if ($buffer.Length -gt 0) {
+        throw "Undo manifest contained incomplete JSON: $LiteralPath"
+    }
+
+    return @($entries)
+}
+
 function Test-FileTimeMatch {
     param(
         [datetime]$Actual,
@@ -325,6 +355,136 @@ function Get-EvidenceRank {
     }
 }
 
+function Convert-EvidenceDateText {
+    param($Evidence)
+
+    if ($null -eq $Evidence) {
+        return $null
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$Evidence.RawValue)) {
+        return [string]$Evidence.RawValue
+    }
+
+    if ($null -ne $Evidence.Date) {
+        return $Evidence.Date.UtcDateTime.ToString('yyyy-MM-dd HH:mm UTC')
+    }
+
+    return $null
+}
+
+function New-EvidenceComparisonRow {
+    param(
+        [string]$Label,
+        [string]$State,
+        [string]$Detail,
+        [bool]$Selected
+    )
+
+    [ordered]@{
+        label = $Label
+        state = $State
+        detail = $Detail
+        selected = $Selected
+    }
+}
+
+function Get-EvidenceComparisonRows {
+    param(
+        $Evidence,
+        [string]$SelectedSource,
+        [datetime]$CreationUtc,
+        [datetime]$LastWriteUtc
+    )
+
+    $rows = [System.Collections.Generic.List[object]]::new()
+    $exifItems = @($Evidence | Where-Object { $_.Source -like 'exif*' })
+    $exifDated = $exifItems | Where-Object { $null -ne $_.Date } | Select-Object -First 1
+    $filename = $Evidence | Where-Object { $_.Source -eq 'filename' } | Select-Object -First 1
+    $folder = $Evidence | Where-Object { $_.Source -eq 'folder' } | Select-Object -First 1
+
+    if ($null -ne $exifDated) {
+        [void]$rows.Add((New-EvidenceComparisonRow -Label 'EXIF' -State 'Has date' -Detail (Convert-EvidenceDateText $exifDated) -Selected ($SelectedSource -like 'exif*')))
+    }
+    elseif (@($exifItems | Where-Object { $_.Source -eq 'exif' -and -not [string]::IsNullOrWhiteSpace([string]$_.Error) }).Count -gt 0) {
+        $err = $exifItems | Where-Object { $_.Source -eq 'exif' } | Select-Object -First 1
+        [void]$rows.Add((New-EvidenceComparisonRow -Label 'EXIF' -State 'Unreadable' -Detail ([string]$err.Error) -Selected $false))
+    }
+    else {
+        [void]$rows.Add((New-EvidenceComparisonRow -Label 'EXIF' -State 'Missing' -Detail 'No capture date' -Selected $false))
+    }
+
+    if ($null -ne $filename -and $null -ne $filename.Date) {
+        [void]$rows.Add((New-EvidenceComparisonRow -Label 'Filename' -State 'Has date' -Detail (Convert-EvidenceDateText $filename) -Selected ($SelectedSource -eq 'filename')))
+    }
+    elseif ($null -ne $filename -and -not [string]::IsNullOrWhiteSpace([string]$filename.Error)) {
+        [void]$rows.Add((New-EvidenceComparisonRow -Label 'Filename' -State 'Invalid' -Detail ([string]$filename.Error) -Selected $false))
+    }
+    else {
+        [void]$rows.Add((New-EvidenceComparisonRow -Label 'Filename' -State 'Missing' -Detail 'No date in file name' -Selected $false))
+    }
+
+    if ($null -ne $folder) {
+        if ($null -ne $folder.Date) {
+            [void]$rows.Add((New-EvidenceComparisonRow -Label 'Folder' -State 'Has date' -Detail (Convert-EvidenceDateText $folder) -Selected ($SelectedSource -eq 'folder')))
+        }
+        else {
+            [void]$rows.Add((New-EvidenceComparisonRow -Label 'Folder' -State 'Invalid' -Detail ([string]$folder.Error) -Selected $false))
+        }
+    }
+
+    [void]$rows.Add((New-EvidenceComparisonRow -Label 'Filesystem' -State 'Transfer only' -Detail ("Created {0:yyyy-MM-dd}; modified {1:yyyy-MM-dd}" -f $CreationUtc, $LastWriteUtc) -Selected $false))
+    return @($rows.ToArray())
+}
+
+function Get-DecisionSummaryFromRows {
+    param(
+        $Rows,
+        [string]$Status,
+        [string]$Reason
+    )
+
+    if ($Status -eq 'AlreadyApplied') {
+        $selected = @($Rows | Where-Object { $_.selected }) | Select-Object -First 1
+        if ($null -ne $selected -and $selected.state -eq 'Has date') {
+            return "Already applied. $($selected.label) date ($($selected.detail)) already matches the file."
+        }
+        return $Reason
+    }
+
+    if ($Status -eq 'Conflict') {
+        $dated = @($Rows | Where-Object { $_.state -eq 'Has date' -and $_.label -ne 'Filesystem' } | ForEach-Object { "$($_.label) $($_.detail)" })
+        if ($dated.Count -gt 0) {
+            return "Capture dates disagree: $($dated -join '; ')."
+        }
+        return $Reason
+    }
+
+    $selected = @($Rows | Where-Object { $_.selected }) | Select-Object -First 1
+    $parts = [System.Collections.Generic.List[string]]::new()
+    if ($null -ne $selected -and $selected.state -eq 'Has date') {
+        $parts.Add("$($selected.label) has a date ($($selected.detail)).") | Out-Null
+    }
+
+    foreach ($row in @($Rows | Where-Object { $_.label -in @('EXIF', 'Filename', 'Folder') -and -not $_.selected })) {
+        if ($row.state -eq 'Missing') {
+            $parts.Add("$($row.label) does not.") | Out-Null
+        }
+        elseif ($row.state -eq 'Has date') {
+            $parts.Add("$($row.label) agrees ($($row.detail)).") | Out-Null
+        }
+        elseif ($row.state -in @('Invalid', 'Unreadable')) {
+            $parts.Add("$($row.label) is $($row.state.ToLowerInvariant()).") | Out-Null
+        }
+    }
+
+    if ($parts.Count -eq 0) {
+        return $Reason
+    }
+
+    return ($parts -join ' ')
+}
+
 function New-InaccessibleReview {
     param(
         [System.IO.FileInfo]$File,
@@ -346,6 +506,8 @@ function New-InaccessibleReview {
         status = 'Inaccessible'
         reason = $Reason
         policy = $Policy
+        evidenceComparison = @()
+        decisionSummary = $Reason
     }
 }
 
@@ -407,10 +569,26 @@ function Get-FileDateReview {
             $reason = 'Proposed date exceeds the configured future tolerance.'
         }
         else {
-            $status = 'Proposed'
-            $reason = "Selected $source evidence over filesystem transfer timestamps."
+            $creationMatches = Test-FileTimeMatch -Actual $creationUtc -Expected $proposedDate.UtcDateTime
+            $writeMatches = Test-FileTimeMatch -Actual $lastWriteUtc -Expected $proposedDate.UtcDateTime
+            if ($creationMatches -and ($Policy -eq 'CreationTimeOnly' -or $writeMatches)) {
+                $status = 'AlreadyApplied'
+                $reason = if ($Policy -eq 'CreationTimeOnly') {
+                    'Creation time already matches the proposed capture date.'
+                }
+                else {
+                    'Creation and last-write times already match the proposed capture date.'
+                }
+            }
+            else {
+                $status = 'Proposed'
+                $reason = "Selected $source evidence over filesystem transfer timestamps."
+            }
         }
     }
+
+    $comparison = @(Get-EvidenceComparisonRows -Evidence $evidence -SelectedSource ([string]$source) -CreationUtc $creationUtc -LastWriteUtc $lastWriteUtc)
+    $decisionSummary = Get-DecisionSummaryFromRows -Rows $comparison -Status $status -Reason $reason
 
     [ordered]@{
         path = $File.FullName
@@ -427,6 +605,8 @@ function Get-FileDateReview {
         status = $status
         reason = $reason
         policy = $Policy
+        evidenceComparison = $comparison
+        decisionSummary = $decisionSummary
     }
 }
 
@@ -456,7 +636,7 @@ if ($Undo) {
         throw "Undo manifest not found: $UndoManifestPath"
     }
 
-    $manifestEntries = @(Get-Content -LiteralPath $resolvedManifestPath | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { $_ | ConvertFrom-Json })
+    $manifestEntries = @(Read-JsonlEntries -LiteralPath $resolvedManifestPath)
     foreach ($entry in ($manifestEntries | Select-Object -Last $manifestEntries.Count | Sort-Object appliedAtUtc -Descending)) {
         if (-not (Test-Path -LiteralPath $entry.path)) {
             throw "Undo refused; file is missing: $($entry.path)"
@@ -465,8 +645,22 @@ if ($Undo) {
         if (-not (Test-FileTimeMatch -Actual $current.CreationTimeUtc -Expected $entry.afterCreationTimeUtc) -or -not (Test-FileTimeMatch -Actual $current.LastWriteTimeUtc -Expected $entry.afterLastWriteTimeUtc)) {
             throw "Undo refused; file changed since repair: $($entry.path)"
         }
+        $preEvidence = Get-DateRepairEvidence -File $current
         $current.CreationTimeUtc = [datetime]$entry.beforeCreationTimeUtc
         $current.LastWriteTimeUtc = [datetime]$entry.beforeLastWriteTimeUtc
+        $postFile = Get-Item -LiteralPath $entry.path -Force
+        $postEvidence = Get-DateRepairEvidence -File $postFile
+        $contentUnchanged = $preEvidence.size -eq $postEvidence.size -and
+            $preEvidence.sha256 -eq $postEvidence.sha256 -and
+            $preEvidence.decodeStatus -eq $postEvidence.decodeStatus
+        $timestampsRestored = (Test-FileTimeMatch -Actual $postFile.CreationTimeUtc -Expected $entry.beforeCreationTimeUtc) -and
+            (Test-FileTimeMatch -Actual $postFile.LastWriteTimeUtc -Expected $entry.beforeLastWriteTimeUtc)
+        if (-not $contentUnchanged) {
+            throw "Undo verification failed; file content changed: $($entry.path)"
+        }
+        if (-not $timestampsRestored) {
+            throw "Undo verification failed; timestamps were not restored: $($entry.path)"
+        }
     }
     Write-Host "Undo completed for $($manifestEntries.Count) file(s)."
     return
@@ -507,6 +701,8 @@ else {
                 status = 'Inaccessible'
                 reason = "$($_.Exception.Message) at $($_.InvocationInfo.PositionMessage)"
                 policy = $Policy
+                evidenceComparison = @()
+                decisionSummary = "$($_.Exception.Message) at $($_.InvocationInfo.PositionMessage)"
             }
         }
     }
@@ -598,14 +794,28 @@ if ($Apply) {
             policy = $Policy
             preEvidence = $preEvidence
         }
-        $postEvidence = Get-DateRepairEvidence -File (Get-Item -LiteralPath $review.path -Force)
-        $verified = $preEvidence.size -eq $postEvidence.size -and $preEvidence.sha256 -eq $postEvidence.sha256 -and
-            $preEvidence.lastWriteTimeUtc -eq $postEvidence.lastWriteTimeUtc -and $preEvidence.decodeStatus -eq $postEvidence.decodeStatus
+        $postFile = Get-Item -LiteralPath $review.path -Force
+        $postEvidence = Get-DateRepairEvidence -File $postFile
+        $contentUnchanged = $preEvidence.size -eq $postEvidence.size -and $preEvidence.sha256 -eq $postEvidence.sha256 -and
+            $preEvidence.decodeStatus -eq $postEvidence.decodeStatus
+        if ($Policy -eq 'CreationTimeOnly') {
+            $contentUnchanged = $contentUnchanged -and ($preEvidence.lastWriteTimeUtc -eq $postEvidence.lastWriteTimeUtc)
+        }
+        $timestampApplied = Test-FileTimeMatch -Actual $postFile.CreationTimeUtc -Expected $review.proposedCaptureTimeUtc
+        if ($Policy -eq 'CreationAndLastWriteTime') {
+            $timestampApplied = $timestampApplied -and (Test-FileTimeMatch -Actual $postFile.LastWriteTimeUtc -Expected $review.proposedCaptureTimeUtc)
+        }
+        $verified = $contentUnchanged -and $timestampApplied
         $manifestEntry.postEvidence = $postEvidence
         $manifestEntry.verificationPassed = $verified
         ($manifestEntry | ConvertTo-Json -Compress) | Add-Content -Path $resolvedManifestPath -Encoding UTF8
         $verificationItems += [pscustomobject]@{ path = $review.path; passed = $verified; preEvidence = $preEvidence; postEvidence = $postEvidence }
-        if (-not $verified) { throw "Date repair verification failed: $($review.path)" }
+        if (-not $contentUnchanged) {
+            throw "Date repair verification failed; file content changed: $($review.path)"
+        }
+        if (-not $timestampApplied) {
+            throw "Date repair verification failed; creation time was not set to the proposed date: $($review.path)"
+        }
     }
     $verificationDirectory = Split-Path -Path $VerificationReportPath -Parent
     if ($verificationDirectory -and -not (Test-Path -LiteralPath $verificationDirectory)) { New-Item -Path $verificationDirectory -ItemType Directory -Force | Out-Null }

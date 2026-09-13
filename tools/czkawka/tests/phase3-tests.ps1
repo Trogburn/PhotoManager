@@ -88,6 +88,18 @@ try {
     }
     & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Undo -UndoManifestPath $savedManifest | Out-Null
 
+    $prettyFile = Join-Path $root '2024-06-07_pretty-undo.txt'
+    'pretty undo' | Set-Content -Path $prettyFile -Encoding UTF8
+    $prettyReview = Join-Path $root 'pretty-review.json'
+    $prettyManifest = Join-Path $root 'pretty-undo.jsonl'
+    $prettyDecision = Join-Path $root 'pretty-decision.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $prettyFile -OutputPath $prettyReview | Out-Null
+    @([ordered]@{ path = [System.IO.Path]::GetFullPath($prettyFile); action = 'approve' }) | ConvertTo-Json | Set-Content -Path $prettyDecision -Encoding UTF8
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -ReviewPath $prettyReview -DecisionPath $prettyDecision -OutputPath (Join-Path $root 'pretty-apply.json') -Apply -UndoManifestPath $prettyManifest | Out-Null
+    $prettyEntry = Get-Content -LiteralPath $prettyManifest | Where-Object { $_ } | Select-Object -First 1 | ConvertFrom-Json
+    $prettyEntry | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $prettyManifest -Encoding UTF8
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Undo -UndoManifestPath $prettyManifest | Out-Null
+
     $staleFile = Join-Path $root '2024-07-08_stale.txt'
     'before' | Set-Content -Path $staleFile -Encoding UTF8
     $staleReview = Join-Path $root 'stale-review.json'
@@ -251,6 +263,7 @@ try {
     }
     $batchApply = Join-Path $root 'batch-apply.json'
     $batchManifest = Join-Path $root 'batch-undo.jsonl'
+    $batchHashBefore = (Get-FileHash -LiteralPath $batchPath -Algorithm SHA256).Hash
     & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $batchPath -OutputPath $batchApply -Apply -ApproveHighConfidence -UndoManifestPath $batchManifest | Out-Null
     if (-not (Test-Path -LiteralPath $batchManifest)) {
         throw 'High-confidence batch approval did not write an undo manifest.'
@@ -259,7 +272,26 @@ try {
     if ($batchAfter.ToString('o') -eq $batchBefore.ToString('o')) {
         throw 'High-confidence batch approval did not update CreationTime.'
     }
+    $appliedItem = @((Get-Content -Path $batchApply -Raw | ConvertFrom-Json).items)[0]
+    if (-not (Test-Path -LiteralPath $batchApply) -or
+        [math]::Abs(($batchAfter - [datetime]$appliedItem.proposedCaptureTimeUtc).TotalSeconds) -gt 1) {
+        throw "Apply did not leave CreationTime at the proposed date. actual=$($batchAfter.ToString('o')) proposed=$($appliedItem.proposedCaptureTimeUtc)"
+    }
+    $batchRescan = Join-Path $root 'batch-rescan.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $batchPath -OutputPath $batchRescan | Out-Null
+    $batchRescanItem = @((Get-Content -Path $batchRescan -Raw | ConvertFrom-Json).items)[0]
+    if ($batchRescanItem.status -ne 'AlreadyApplied' -or $batchRescanItem.decisionSummary -notlike '*Already applied*') {
+        throw "Rescan after apply did not mark the file already applied. status=$($batchRescanItem.status) summary=$($batchRescanItem.decisionSummary)"
+    }
     & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Undo -UndoManifestPath $batchManifest | Out-Null
+    $batchAfterUndo = Get-Item -LiteralPath $batchPath
+    $batchHashAfterUndo = (Get-FileHash -LiteralPath $batchPath -Algorithm SHA256).Hash
+    if ($batchHashAfterUndo -ne $batchHashBefore) {
+        throw 'Undo changed file bytes.'
+    }
+    if ([math]::Abs(($batchAfterUndo.CreationTimeUtc - $batchBefore).TotalSeconds) -gt 1) {
+        throw "Undo did not restore CreationTime. actual=$($batchAfterUndo.CreationTimeUtc.ToString('o')) expected=$($batchBefore.ToString('o'))"
+    }
 
     Write-Host 'Phase 3 evidence tests passed.'
 }
