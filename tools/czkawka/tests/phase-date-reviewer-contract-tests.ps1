@@ -28,8 +28,19 @@ try {
         throw "Decision summary did not highlight filename vs EXIF. summary=$($item.decisionSummary)"
     }
     $filenameRow = @($item.evidenceComparison | Where-Object { $_.label -eq 'Filename' }) | Select-Object -First 1
-    if (-not $filenameRow.utc -or $filenameRow.utc -notlike '2026-01-01T*') {
+    try {
+        $filenameUtc = [datetimeoffset]$filenameRow.utc
+    }
+    catch {
         throw "Filename evidence is missing a choosable UTC date. utc=$($filenameRow.utc)"
+    }
+    $filenameDate = $filenameUtc.Date.ToString('yyyy-MM-dd')
+    $filenameUtcDate = $filenameUtc.UtcDateTime.ToString('yyyy-MM-dd')
+    if ($filenameDate -ne '2026-01-01' -and $filenameUtcDate -ne '2026-01-01') {
+        throw "Filename evidence UTC was not 2026-01-01. utc=$filenameUtc"
+    }
+    if ((Get-Content -LiteralPath $reportPath -Raw) -notmatch '"label":\s*"Filename"[\s\S]*?"utc":\s*"\d{4}-\d{2}-\d{2}T') {
+        throw 'Filename evidence UTC was not written as an ISO-8601 string for the WPF reviewer.'
     }
     $labels = @($item.evidenceComparison | ForEach-Object label)
     if ($labels -notcontains 'EXIF' -or $labels -notcontains 'Filename' -or $labels -notcontains 'Filesystem') {
