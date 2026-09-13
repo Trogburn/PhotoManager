@@ -35,6 +35,7 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
         DuplicateWork.PropertyChanged += ForwardChildPropertyChanged;
         StartCommand = new RelayCommand(Start);
         ResetCommand = new RelayCommand(Reset);
+        ReturnToConfigurationCommand = new RelayCommand(ReturnToConfiguration, CanReturnToConfiguration);
     }
 
     public DateWorkflowViewModel DateWork { get; }
@@ -83,6 +84,7 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
 
     public RelayCommand StartCommand { get; }
     public RelayCommand ResetCommand { get; }
+    public RelayCommand ReturnToConfigurationCommand { get; }
     public RelayCommand StartDateWorkCommand => DateWork.StartDateWorkCommand;
     public RelayCommand ScanDatesCommand => DateWork.ScanDatesCommand;
     public RelayCommand CreateDateSnapshotCommand => DateWork.CreateDateSnapshotCommand;
@@ -92,6 +94,7 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
     public RelayCommand SelectAllDateUndoCommand => DateWork.SelectAllDateUndoCommand;
     public RelayCommand SampleDateReviewCommand => DateWork.SampleDateReviewCommand;
     public RelayCommand ConfigureDuplicatesCommand => DuplicateWork.ConfigureDuplicatesCommand;
+    public RelayCommand ContinueDuplicateWorkCommand => DuplicateWork.ContinueDuplicateWorkCommand;
     public RelayCommand ScanDuplicatesCommand => DuplicateWork.ScanDuplicatesCommand;
     public RelayCommand OpenDuplicateReviewerCommand => DuplicateWork.OpenDuplicateReviewerCommand;
     public RelayCommand ValidateDuplicateReviewCommand => DuplicateWork.ValidateDuplicateReviewCommand;
@@ -100,7 +103,9 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
     public RelayCommand DuplicateApplyCommand => DuplicateWork.DuplicateApplyCommand;
     public RelayCommand DuplicateVerifyCommand => DuplicateWork.DuplicateVerifyCommand;
     public RelayCommand LoadDuplicateUndoCommand => DuplicateWork.LoadDuplicateUndoCommand;
+    public RelayCommand SelectAllDuplicateUndoCommand => DuplicateWork.SelectAllDuplicateUndoCommand;
     public RelayCommand UndoSelectedDuplicatesCommand => DuplicateWork.UndoSelectedDuplicatesCommand;
+    public RelayCommand UndoAllDuplicatesCommand => DuplicateWork.UndoAllDuplicatesCommand;
 
     public ObservableCollection<DateReviewRowViewModel> DateItems => DateWork.DateItems;
     public ObservableCollection<DateUndoRowViewModel> UndoItems => DateWork.UndoItems;
@@ -165,6 +170,7 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
         OnPropertyChanged(nameof(DuplicateWorkPageVisibility));
         OnPropertyChanged(nameof(DateWorkPageVisibility));
         OnPropertyChanged(nameof(DateUndoPageVisibility));
+        ReturnToConfigurationCommand.RaiseCanExecuteChanged();
     }
 
     void IShellWorkflowHost.RefreshSession()
@@ -186,6 +192,7 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
     {
         DateWork.RaiseCommandStates();
         DuplicateWork.RaiseCommandStates();
+        ReturnToConfigurationCommand.RaiseCanExecuteChanged();
     }
 
     internal void LoadDateReviewForTests(DateReviewReport report, string reportPath = "review.json") =>
@@ -211,6 +218,25 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
 
     internal void ReturnToDateWorkForTests() =>
         DateWork.ReturnToDateWorkForTests();
+
+    internal void PrepareFinishedDuplicateSessionForTests()
+    {
+        _workflow.TransitionTo(Models.WorkflowState.Configured);
+        _workflow.TransitionTo(Models.WorkflowState.Scanning);
+        _workflow.TransitionTo(Models.WorkflowState.ScanReady);
+        _workflow.TransitionTo(Models.WorkflowState.Reviewing);
+        _workflow.TransitionTo(Models.WorkflowState.RemediationReady);
+        _workflow.TransitionTo(Models.WorkflowState.RemediationApplied);
+        DuplicateWork.MarkConfiguredForTests(new AppConfig
+        {
+            ScanRoot = ScanRoot,
+            QuarantineRoot = QuarantineRoot,
+            ArtifactRoot = ArtifactRoot
+        });
+        ((IShellWorkflowHost)this).Navigate(WorkflowPage.Configuration);
+        ((IShellWorkflowHost)this).RefreshSession();
+        ((IShellWorkflowHost)this).RaiseCommandStates();
+    }
 
     private async void Start()
     {
@@ -241,6 +267,16 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
         {
             StatusMessage = exception.Message;
         }
+    }
+
+    private bool CanReturnToConfiguration() => _currentPage != WorkflowPage.Configuration;
+
+    private void ReturnToConfiguration()
+    {
+        ((IShellWorkflowHost)this).Navigate(WorkflowPage.Configuration);
+        StatusMessage = "Choose the next workflow.";
+        ((IShellWorkflowHost)this).RefreshSession();
+        ((IShellWorkflowHost)this).RaiseCommandStates();
     }
 
     private void Reset()

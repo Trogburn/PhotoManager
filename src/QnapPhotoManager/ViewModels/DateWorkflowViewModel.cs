@@ -23,6 +23,7 @@ public sealed class DateWorkflowViewModel : ObservableObject
     private string _dateEvidenceSummary = "Select a date proposal to inspect its evidence.";
     private string _datePreviewMessage = string.Empty;
     private bool _dateApplyCompleted;
+    private bool _dateWorkStarted;
     private int _sampleCount = 25;
 
     internal DateWorkflowViewModel(DateRepairService dateRepair, IShellWorkflowHost host)
@@ -117,6 +118,7 @@ public sealed class DateWorkflowViewModel : ObservableObject
         _dateSnapshotName = null;
         DateSnapshotConfirmed = false;
         _dateApplyCompleted = false;
+        _dateWorkStarted = false;
         _retainedDecisions.Clear();
         _pathsReopenedByUndo.Clear();
         SelectedDateItem = null;
@@ -211,6 +213,7 @@ public sealed class DateWorkflowViewModel : ObservableObject
                 Path.Combine("sessions", $"{_host.Workflow.Session.Id:N}", "date-config.json"),
                 "date-session-config",
                 config);
+            _dateWorkStarted = true;
             _host.Navigate(WorkflowPage.DateWork);
             _host.SetStatus("Date workflow configured. Scan is read-only.");
             _host.RefreshSession();
@@ -472,7 +475,12 @@ public sealed class DateWorkflowViewModel : ObservableObject
     };
 
     private bool CanStartDateWork() =>
-        _host.Workflow.Session.State == WorkflowState.Idle;
+        _host.CurrentPage == WorkflowPage.Configuration
+        && (
+            _dateWorkStarted
+            || _host.Workflow.Session.State is WorkflowState.Idle
+                or WorkflowState.RemediationApplied
+                or WorkflowState.Completed);
 
     private bool CanScanDates() =>
         _host.CurrentPage == WorkflowPage.DateWork && _dateReport is null;

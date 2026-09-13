@@ -240,6 +240,57 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
+    public void ReturnToConfigurationLeavesDateWorkWithoutResettingSession()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var viewModel = CreateViewModel(root);
+            Assert.False(viewModel.ReturnToConfigurationCommand.CanExecute(null));
+            viewModel.StartDateWorkCommand.Execute(null);
+            Assert.True(SpinWait.SpinUntil(
+                () => viewModel.CurrentPage == WorkflowPage.DateWork,
+                TimeSpan.FromSeconds(3)));
+
+            Assert.True(viewModel.ReturnToConfigurationCommand.CanExecute(null));
+            viewModel.ReturnToConfigurationCommand.Execute(null);
+
+            Assert.Equal(WorkflowPage.Configuration, viewModel.CurrentPage);
+            Assert.Equal(WorkflowState.Configured, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
+            Assert.True(viewModel.StartDateWorkCommand.CanExecute(null));
+            Assert.False(viewModel.ConfigureDuplicatesCommand.CanExecute(null));
+            Assert.False(viewModel.ContinueDuplicateWorkCommand.CanExecute(null));
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void StartDateWorkAfterFinishedDuplicateKeepsAppliedState()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var viewModel = CreateViewModel(root);
+            viewModel.PrepareFinishedDuplicateSessionForTests();
+
+            Assert.Equal(WorkflowPage.Configuration, viewModel.CurrentPage);
+            Assert.Equal(WorkflowState.RemediationApplied, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
+            Assert.False(viewModel.ConfigureDuplicatesCommand.CanExecute(null));
+            Assert.True(viewModel.ContinueDuplicateWorkCommand.CanExecute(null));
+            Assert.True(viewModel.StartDateWorkCommand.CanExecute(null));
+
+            viewModel.StartDateWorkCommand.Execute(null);
+            Assert.True(SpinWait.SpinUntil(
+                () => viewModel.CurrentPage == WorkflowPage.DateWork,
+                TimeSpan.FromSeconds(3)));
+
+            Assert.Equal(WorkflowState.RemediationApplied, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
+            Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
     public void DateWorkCommandsFollowScanSnapshotConfirmAndApply()
     {
         var root = NewTempDirectory();

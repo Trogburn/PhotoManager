@@ -70,6 +70,11 @@
                         Command="{Binding ResetCommand}"
                         Content="Reset entire session"
                         ToolTip="Clears this session's in-memory workflow state. Existing artifacts and quarantine files are not deleted." />
+                <Button DockPanel.Dock="Right"
+                        AutomationProperties.AutomationId="ReturnToConfigurationButton"
+                        Command="{Binding ReturnToConfigurationCommand}"
+                        Content="Back to configuration"
+                        ToolTip="Leave this workflow page and choose duplicate or date work again. Does not reset the session or move files." />
                 <StackPanel Orientation="Horizontal">
                 <TextBlock FontWeight="SemiBold" Text="Workflow state:" />
                 <TextBlock AutomationProperties.AutomationId="WorkflowStateText"
@@ -88,6 +93,8 @@
             <GroupBox AutomationProperties.AutomationId="ConfigurationPage" Header="Configuration" Margin="0,0,10,0">
                 <Grid Margin="12">
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -128,12 +135,17 @@
                             IsEnabled="{Binding IsConfigurationEditable}"
                             Command="{x:Static ApplicationCommands.Paste}" CommandTarget="{Binding ElementName=QuarantineRootBox}"
                             Content="Paste" />
-                    <Button Grid.Row="6" Margin="0,24,0,0"
+                    <TextBlock Grid.Row="6" Margin="0,20,0,0" Foreground="Gray" TextWrapping="Wrap"
+                               Text="Duplicate work and date work are separate. Finish or leave a workflow, then choose the next one here." />
+                    <Button Grid.Row="7" Margin="0,12,0,0"
                             AutomationProperties.AutomationId="ConfigureDuplicatesButton"
                             Command="{Binding ConfigureDuplicatesCommand}" Content="Configure and continue to duplicate work" />
-                    <Button Grid.Row="7" Margin="0,8,0,0"
+                    <Button Grid.Row="8" Margin="0,8,0,0"
+                            AutomationProperties.AutomationId="ContinueDuplicateWorkButton"
+                            Command="{Binding ContinueDuplicateWorkCommand}" Content="Continue duplicate work" />
+                    <Button Grid.Row="9" Margin="0,8,0,0"
                             AutomationProperties.AutomationId="StartDateWorkButton"
-                            Command="{Binding StartDateWorkCommand}" Content="Start date work (skip duplicate scan)" />
+                            Command="{Binding StartDateWorkCommand}" Content="Start date work" />
                 </Grid>
             </GroupBox>
         </Grid>
@@ -162,15 +174,18 @@
                     <Button AutomationProperties.AutomationId="DuplicateApplyButton" Margin="12,0,0,0"
                             Command="{Binding DuplicateApplyCommand}" Content="Apply quarantine" />
                     <Button AutomationProperties.AutomationId="DuplicateVerifyButton" Margin="8,0,0,0"
-                            Command="{Binding DuplicateVerifyCommand}" Content="Verify and continue to dates" />
+                            Command="{Binding DuplicateVerifyCommand}" Content="Verify quarantine" />
                 </WrapPanel>
-                <TextBlock Margin="0,14,0,0" Foreground="Gray" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
                 <GroupBox Header="Selective duplicate undo" Margin="0,20,0,0">
                     <DockPanel Margin="10">
                         <WrapPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                             <Button AutomationProperties.AutomationId="LoadDuplicateUndoButton" Command="{Binding LoadDuplicateUndoCommand}" Content="Refresh active moves" />
+                            <Button AutomationProperties.AutomationId="SelectAllDuplicateUndoButton" Margin="8,0,0,0"
+                                    Command="{Binding SelectAllDuplicateUndoCommand}" Content="Select all" />
                             <Button AutomationProperties.AutomationId="UndoSelectedDuplicatesButton" Margin="8,0,0,0"
                                     Command="{Binding UndoSelectedDuplicatesCommand}" Content="Undo selected" />
+                            <Button AutomationProperties.AutomationId="UndoAllDuplicatesButton" Margin="8,0,0,0"
+                                    Command="{Binding UndoAllDuplicatesCommand}" Content="Undo all" />
                         </WrapPanel>
                         <DataGrid ItemsSource="{Binding DuplicateUndoItems}" AutoGenerateColumns="False" CanUserAddRows="False"
                                   HeadersVisibility="Column" MaxHeight="180">
@@ -450,7 +465,7 @@
 
         <StatusBar Grid.Row="4" Margin="0,0,0,0">
             <StatusBarItem>
-                <TextBlock AutomationProperties.AutomationId="StatusMessageText" Text="{Binding StatusMessage}" />
+                <TextBlock AutomationProperties.AutomationId="StatusMessageText" Text="{Binding StatusMessage}" TextWrapping="Wrap" />
             </StatusBarItem>
         </StatusBar>
     </Grid>
