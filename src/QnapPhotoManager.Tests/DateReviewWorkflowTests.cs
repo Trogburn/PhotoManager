@@ -55,12 +55,18 @@ public sealed class DateReviewRowViewModelTests
         };
         var row = new DateReviewRowViewModel(item, _ => { });
 
-        Assert.Equal("Skip", row.Decision);
+        Assert.Equal("Undecided", row.Decision);
+        Assert.True(row.IsConflict);
+        Assert.True(row.IsReviewable);
+        Assert.Equal("Dates conflict", row.DecisionLabel);
+        Assert.Contains("Dates conflict", row.DecisionStatusLine, StringComparison.Ordinal);
         Assert.Equal("2026-01-01_keep.jpg", row.FileName);
         Assert.Equal("339 bytes", row.SizeDescription);
         Assert.Equal("unspecified-local (-06:00)", row.TimezoneDescription);
         Assert.False(string.IsNullOrWhiteSpace(row.ProposedLocalTime));
-        Assert.Equal("skip", row.ToDecision().Action);
+        Assert.Throws<InvalidOperationException>(() => row.ToDecision());
+        Assert.True(row.SkipCommand.CanExecute(null));
+        Assert.False(row.ApproveCommand.CanExecute(null));
     }
 
     private static DateReviewRowViewModel NewRow(string status) =>
@@ -95,6 +101,19 @@ public sealed class DateReviewDecisionPolicyTests
     }
 
     [Fact]
+    public void SnapshotRequiresConflictSourceChoice()
+    {
+        var proposed = Proposed("one.jpg");
+        var conflict = Conflict("two.jpg");
+        proposed.Decision = "Approve";
+
+        Assert.False(DateReviewDecisionPolicy.CanCreateSnapshot([proposed, conflict]));
+
+        conflict.SkipCommand.Execute(null);
+        Assert.True(DateReviewDecisionPolicy.CanCreateSnapshot([proposed, conflict]));
+    }
+
+    [Fact]
     public void ApplyRequiresConfirmedSnapshotAndCompleteDecisions()
     {
         var row = Proposed("one.jpg");
@@ -119,6 +138,37 @@ public sealed class DateReviewDecisionPolicyTests
             Path = @"\\server\share\photos\" + name,
             Status = "Proposed",
             ProposedCaptureTimeUtc = "2026-01-01T00:00:00Z"
+        }, _ => { });
+
+    private static DateReviewRowViewModel Conflict(string name) =>
+        new(new DateReviewItem
+        {
+            Path = @"\\server\share\photos\" + name,
+            Status = "Conflict",
+            Source = "exif-DateTimeOriginal",
+            RawValue = "2022:01:02 03:04:05",
+            ParsedFilenameToken = "2023-02-03",
+            ProposedCaptureTimeUtc = "2022-01-02T09:04:05Z",
+            Confidence = "High",
+            Reason = "Multiple date sources disagree; no automatic change is allowed.",
+            EvidenceComparison =
+            [
+                new DateEvidenceComparison
+                {
+                    Label = "EXIF",
+                    State = "Has date",
+                    Detail = "2022:01:02 03:04:05",
+                    Selected = true,
+                    Utc = "2022-01-02T09:04:05Z"
+                },
+                new DateEvidenceComparison
+                {
+                    Label = "Filename",
+                    State = "Has date",
+                    Detail = "2023-02-03",
+                    Utc = "2023-02-03T06:00:00Z"
+                }
+            ]
         }, _ => { });
 }
 
@@ -535,6 +585,62 @@ public sealed class DateEvidencePresentationTests
 
         Assert.Equal(item.DecisionSummary, DateEvidencePresentation.BuildHeadline(item));
         Assert.Equal(2, DateEvidencePresentation.BuildRows(item).Count);
+    }
+
+    [Theory]
+    [InlineData("InvalidEvidence", "Ambiguous filename date (month/day/year vs day/month/year): 01-02-2024", "Ambiguous date")]
+    [InlineData("InvalidEvidence", "Impossible filename date: 2024-02-30", "Impossible date")]
+    [InlineData("InvalidEvidence", "Invalid or ambiguous filename date: 2024-13-40", "Invalid date")]
+    [InlineData("FutureDate", "Proposed date exceeds the configured future tolerance.", "Future date")]
+    [InlineData("NoEvidence", "No supported capture-date evidence was found.", "No dates")]
+    [InlineData("Conflict", "Multiple date sources disagree.", "Dates conflict")]
+    [InlineData("AlreadyApplied", "Creation time already matches.", "Already applied")]
+    public void StatusLabelIsSpecific(string status, string reason, string expected)
+    {
+        Assert.Equal(expected, DateEvidencePresentation.StatusLabel(new DateReviewItem
+        {
+            Status = status,
+            Reason = reason
+        }));
+    }
+
+    [Fact]
+    public void ConflictRowCanChooseFilenameAndEmitsManualDecision()
+    {
+        var row = new DateReviewRowViewModel(new DateReviewItem
+        {
+            Path = @"\\server\share\photos\2023-02-03_conflict.jpg",
+            Status = "Conflict",
+            Source = "exif-DateTimeOriginal",
+            ProposedCaptureTimeUtc = "2022-01-02T09:04:05Z",
+            EvidenceComparison =
+            [
+                new DateEvidenceComparison
+                {
+                    Label = "EXIF",
+                    State = "Has date",
+                    Detail = "2022:01:02 03:04:05",
+                    Selected = true,
+                    Utc = "2022-01-02T09:04:05Z"
+                },
+                new DateEvidenceComparison
+                {
+                    Label = "Filename",
+                    State = "Has date",
+                    Detail = "2023-02-03",
+                    Utc = "2023-02-03T06:00:00Z"
+                }
+            ]
+        }, _ => { });
+
+        var filename = Assert.Single(row.SourceChoices, choice => choice.Label == "Filename");
+        filename.ChooseCommand.Execute(null);
+
+        Assert.True(row.IsApproved);
+        Assert.Equal("Use Filename", row.DecisionLabel);
+        var decision = row.ToDecision();
+        Assert.Equal("manual", decision.Action);
+        Assert.Equal("2023-02-03T06:00:00Z", decision.Date);
     }
 
     [Fact]

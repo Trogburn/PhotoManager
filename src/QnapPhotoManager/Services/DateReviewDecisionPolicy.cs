@@ -7,8 +7,8 @@ public static class DateReviewDecisionPolicy
     public static bool HasCompleteProposedDecisions(IEnumerable<DateReviewRowViewModel> items)
     {
         ArgumentNullException.ThrowIfNull(items);
-        var proposed = items.Where(item => item.IsProposed).ToArray();
-        return proposed.Length > 0 && proposed.All(item => item.HasDecision);
+        var reviewable = items.Where(item => item.IsReviewable).ToArray();
+        return reviewable.Length > 0 && reviewable.All(item => item.HasDecision);
     }
 
     public static bool HasApprovedProposal(IEnumerable<DateReviewRowViewModel> items)

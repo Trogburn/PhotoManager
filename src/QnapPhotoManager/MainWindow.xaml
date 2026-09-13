@@ -290,7 +290,7 @@
                                                 <Style TargetType="StackPanel">
                                                     <Setter Property="Visibility" Value="Collapsed" />
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsProposed}" Value="True">
+                                                        <DataTrigger Binding="{Binding IsReviewable}" Value="True">
                                                             <Setter Property="Visibility" Value="Visible" />
                                                         </DataTrigger>
                                                     </Style.Triggers>
@@ -299,7 +299,11 @@
                                             <Button Command="{Binding ApproveCommand}" Content="Approve">
                                                 <Button.Style>
                                                     <Style TargetType="Button" BasedOn="{StaticResource DateDecisionButton}">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
                                                         <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsProposed}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
                                                             <DataTrigger Binding="{Binding IsApproved}" Value="True">
                                                                 <Setter Property="FontWeight" Value="SemiBold" />
                                                             </DataTrigger>
@@ -307,6 +311,30 @@
                                                     </Style>
                                                 </Button.Style>
                                             </Button>
+                                            <ItemsControl ItemsSource="{Binding SourceChoices}">
+                                                <ItemsControl.Style>
+                                                    <Style TargetType="ItemsControl">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsConflict}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ItemsControl.Style>
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <StackPanel Orientation="Horizontal" />
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Button Margin="0,0,8,0" Command="{Binding ChooseCommand}"
+                                                                Content="{Binding ButtonLabel}"
+                                                                Style="{StaticResource DateDecisionButton}" />
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
                                             <Button Margin="8,0,0,0" Command="{Binding SkipCommand}" Content="Skip">
                                                 <Button.Style>
                                                     <Style TargetType="Button" BasedOn="{StaticResource DateDecisionButton}">
@@ -330,6 +358,8 @@
                                    Text="{Binding SelectedDateItem.Path}" TextTrimming="CharacterEllipsis"
                                    ToolTip="{Binding SelectedDateItem.Path}"
                                    AutomationProperties.AutomationId="SelectedDatePathText" />
+                        <TextBlock DockPanel.Dock="Top" Margin="0,8,0,0" TextWrapping="Wrap"
+                                   Text="{Binding SelectedDateItem.ReviewHint}" />
                         <ItemsControl DockPanel.Dock="Top" Margin="0,12,0,0"
                                       ItemsSource="{Binding SelectedDateItem.EvidenceRows}">
                             <ItemsControl.ItemTemplate>
