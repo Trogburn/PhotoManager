@@ -11,10 +11,12 @@ $tests = @(
     'phase2-tests.ps1',
     'phase3-smoke.ps1',
     'phase3-tests.ps1',
+    'phase-date-reviewer-contract-tests.ps1',
     'phase4-tests.ps1',
     'phase5-tests.ps1',
     'phase6-tests.ps1',
-    'phase7-tests.ps1'
+    'phase7-tests.ps1',
+    'phase8-tests.ps1'
 )
 
 foreach ($test in $tests) {
