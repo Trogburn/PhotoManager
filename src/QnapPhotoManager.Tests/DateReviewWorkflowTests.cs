@@ -278,9 +278,76 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
 
             Assert.Equal(WorkflowPage.Configuration, viewModel.CurrentPage);
             Assert.Equal(WorkflowState.Configured, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
-            Assert.True(viewModel.StartDateWorkCommand.CanExecute(null));
-            Assert.False(viewModel.ConfigureDuplicatesCommand.CanExecute(null));
+            Assert.False(viewModel.StartDateWorkCommand.CanExecute(null));
+            Assert.True(viewModel.ContinueDateWorkCommand.CanExecute(null));
+            Assert.True(viewModel.ConfigureDuplicatesCommand.CanExecute(null));
             Assert.False(viewModel.ContinueDuplicateWorkCommand.CanExecute(null));
+
+            viewModel.ContinueDateWorkCommand.Execute(null);
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void StartDateWorkFromReviewingDuplicatesDoesNotRequireReset()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var viewModel = CreateViewModel(root);
+            viewModel.PrepareReviewingDuplicateSessionForTests();
+
+            Assert.Equal(WorkflowPage.Configuration, viewModel.CurrentPage);
+            Assert.Equal(WorkflowState.Reviewing, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
+            Assert.False(viewModel.ConfigureDuplicatesCommand.CanExecute(null));
+            Assert.True(viewModel.ContinueDuplicateWorkCommand.CanExecute(null));
+            Assert.True(viewModel.StartDateWorkCommand.CanExecute(null));
+
+            viewModel.StartDateWorkCommand.Execute(null);
+            Assert.True(SpinWait.SpinUntil(
+                () => viewModel.CurrentPage == WorkflowPage.DateWork,
+                TimeSpan.FromSeconds(3)));
+
+            Assert.Equal(WorkflowState.Reviewing, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
+            Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
+
+            viewModel.ReturnToConfigurationCommand.Execute(null);
+            Assert.Equal(WorkflowPage.Configuration, viewModel.CurrentPage);
+            Assert.True(viewModel.ContinueDuplicateWorkCommand.CanExecute(null));
+            Assert.False(viewModel.StartDateWorkCommand.CanExecute(null));
+            Assert.True(viewModel.ContinueDateWorkCommand.CanExecute(null));
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void ConfigureDuplicatesAfterDateWorkDoesNotRequireReset()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var viewModel = CreateViewModel(root);
+            viewModel.StartDateWorkCommand.Execute(null);
+            Assert.True(SpinWait.SpinUntil(
+                () => viewModel.CurrentPage == WorkflowPage.DateWork,
+                TimeSpan.FromSeconds(3)));
+            viewModel.ReturnToConfigurationCommand.Execute(null);
+
+            Assert.True(viewModel.ConfigureDuplicatesCommand.CanExecute(null));
+            viewModel.ConfigureDuplicatesCommand.Execute(null);
+            Assert.True(SpinWait.SpinUntil(
+                () => viewModel.CurrentPage == WorkflowPage.DuplicateWork,
+                TimeSpan.FromSeconds(3)));
+
+            Assert.Equal(WorkflowState.Configured, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
+            Assert.True(viewModel.ScanDuplicatesCommand.CanExecute(null));
+
+            viewModel.ReturnToConfigurationCommand.Execute(null);
+            Assert.False(viewModel.ConfigureDuplicatesCommand.CanExecute(null));
+            Assert.True(viewModel.ContinueDuplicateWorkCommand.CanExecute(null));
+            Assert.False(viewModel.StartDateWorkCommand.CanExecute(null));
+            Assert.True(viewModel.ContinueDateWorkCommand.CanExecute(null));
         }
         finally { Delete(root); }
     }

@@ -103,6 +103,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -146,6 +147,9 @@
                     <Button Grid.Row="9" Margin="0,8,0,0"
                             AutomationProperties.AutomationId="StartDateWorkButton"
                             Command="{Binding StartDateWorkCommand}" Content="Start date work" />
+                    <Button Grid.Row="10" Margin="0,8,0,0"
+                            AutomationProperties.AutomationId="ContinueDateWorkButton"
+                            Command="{Binding ContinueDateWorkCommand}" Content="Continue date work" />
                 </Grid>
             </GroupBox>
         </Grid>

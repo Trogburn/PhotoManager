@@ -12,7 +12,7 @@ public sealed class WorkflowStateMachine
             [WorkflowState.Scanning] = [WorkflowState.ScanReady, WorkflowState.Failed],
             [WorkflowState.ScanReady] = [WorkflowState.Reviewing, WorkflowState.DateReviewReady, WorkflowState.Failed],
             [WorkflowState.Reviewing] = [WorkflowState.DateReviewReady, WorkflowState.RemediationReady, WorkflowState.Failed],
-            [WorkflowState.DateReviewReady] = [WorkflowState.Reviewing, WorkflowState.RemediationReady, WorkflowState.Failed],
+            [WorkflowState.DateReviewReady] = [WorkflowState.Scanning, WorkflowState.Reviewing, WorkflowState.RemediationReady, WorkflowState.Failed],
             [WorkflowState.RemediationReady] = [WorkflowState.RemediationApplied, WorkflowState.Failed],
             [WorkflowState.RemediationApplied] = [WorkflowState.Completed, WorkflowState.Failed],
             [WorkflowState.Completed] = [WorkflowState.Configured, WorkflowState.RemediationApplied],
