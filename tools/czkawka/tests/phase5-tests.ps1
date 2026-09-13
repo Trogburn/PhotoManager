@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $root = Join-Path ([System.IO.Path]::GetTempPath()) "qnap-phase5-$([guid]::NewGuid().ToString('N'))"
 New-Item -Path $root -ItemType Directory -Force | Out-Null
 try {
-    $fixture = Join-Path $PSScriptRoot 'fixtures\phase5-review.local.json'
+    $fixture = Join-Path $PSScriptRoot 'fixtures\phase5-review.json'
     $fixtureBefore = (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash
     $input = Join-Path $root 'classified.json'
     $decisions = Join-Path $root 'decisions.json'
@@ -54,7 +54,8 @@ try {
     }
     $uncItem = @($archive.groups.items | Where-Object path -eq '\\server\photos\Reference\original.jpg')[0]
     if ($null -eq $uncItem -or $uncItem.filename -eq '') { throw 'UNC-shaped path did not round-trip with filename.' }
-    if ($uncItem.proposedDate.Year -ne 2024 -or $uncItem.proposedDate.Month -ne 1 -or $uncItem.proposedDate.Day -ne 1) { throw "Date proposal was not included in the archive: $($uncItem | ConvertTo-Json -Compress)" }
+    $proposedDate = [datetimeoffset]::Parse([string]$uncItem.proposedDate).UtcDateTime
+    if ($proposedDate.Year -ne 2024 -or $proposedDate.Month -ne 1 -or $proposedDate.Day -ne 1) { throw "Date proposal was not included in the archive: $($uncItem | ConvertTo-Json -Compress)" }
     if ((Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash -ne $fixtureBefore) {
         throw 'Reviewer changed the source fixture.'
     }

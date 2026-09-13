@@ -24,6 +24,20 @@ try {
     'same share' | Set-Content $sameShare -Encoding UTF8
     'permission' | Set-Content $permissionSource -Encoding UTF8
 
+    . (Join-Path $PSScriptRoot '..\common-hash.ps1')
+    $hashProbe = Join-Path $root 'hash-probe.txt'
+    'sha-probe' | Set-Content $hashProbe -Encoding UTF8
+    $dotnetHash = Get-Sha256Hex -LiteralPath $hashProbe
+    if ($dotnetHash -notmatch '^[0-9a-f]{64}$') {
+        throw 'Get-Sha256Hex did not return a SHA-256 hex digest.'
+    }
+    if (Get-Command Get-FileHash -ErrorAction SilentlyContinue) {
+        $cmdletHash = (Get-FileHash -LiteralPath $hashProbe -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($dotnetHash -ne $cmdletHash) {
+            throw 'Get-Sha256Hex did not match Get-FileHash.'
+        }
+    }
+
     $entries = foreach ($path in @($keep, $move, $protected, $stale, $excluded, $sameShare, $permissionSource)) {
         $file = Get-Item $path
         $hash = if ($path -eq $move) { (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant() } else { $null }
@@ -40,14 +54,14 @@ try {
     $configPath = Join-Path $root 'config.json'
     @{ scan = @{ protectedPaths = @(); excludedPaths = @($excluded); preferredDirectories = @() } } | ConvertTo-Json -Depth 5 | Set-Content $configPath -Encoding UTF8
     $decisionsPath = Join-Path $root 'decisions.json'
-    @([ordered]@{ groupId = 'phase6-group'; action = 'quarantine-requested'; keepPath = $keep }) | ConvertTo-Json | Set-Content $decisionsPath -Encoding UTF8
+    @([ordered]@{ groupId = 'phase6-group'; action = 'keep'; keepPath = $keep }) | ConvertTo-Json | Set-Content $decisionsPath -Encoding UTF8
     $manifest = Join-Path $root 'transactions.jsonl'
 
     $dry = & (Join-Path $PSScriptRoot '..\remediate.ps1') -InputPath $classifiedPath -DecisionPath $decisionsPath -ConfigPath $configPath -QuarantineRoot $quarantine -TransactionManifestPath $manifest
     if (-not $dry.dryRun -or $dry.dryRunCount -ne 4 -or @($dry.results | Where-Object reason -eq 'excluded').Count -ne 1 -or -not (Test-Path $move) -or -not (Test-Path $protected)) {
-        throw 'Dry-run did not preserve source files or identify requested candidates.'
+        throw 'Keep decision did not preserve its keeper or identify non-keeper quarantine candidates.'
     }
-    if (Test-Path $manifest) { throw 'Dry-run unexpectedly created a transaction manifest.' }
+    if ((Test-Path $manifest) -or (Test-Path $quarantine)) { throw 'Dry-run unexpectedly created a quarantine artifact.' }
 
     $protectedDecision = @([ordered]@{ path = $protected; action = 'quarantine-requested' })
     $protectedDecision += [ordered]@{ path = $move; action = 'quarantine-requested' }
@@ -76,11 +90,39 @@ try {
     $collision = & (Join-Path $PSScriptRoot '..\remediate.ps1') -InputPath $collisionPath -DecisionPath $decisionsPath -ConfigPath $configPath -QuarantineRoot $quarantine -TransactionManifestPath $manifest -Apply
     if ($collision.moved -ne 1 -or $collision.results[0].destination -eq $movedDestination) { throw 'Collision-safe destination was not generated.' }
 
+    $collisionDestination = [string]$collision.results[0].destination
+    $undoList = Join-Path $root 'undo-one.txt'
+    $move | Set-Content -LiteralPath $undoList -Encoding UTF8
+    $fileUndoOut = Join-Path $root 'file-undo.out.txt'
+    $fileUndoErr = Join-Path $root 'file-undo.err.txt'
+    $fileUndo = Start-Process -FilePath powershell.exe -ArgumentList @(
+        '-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+        '-File', (Join-Path $PSScriptRoot '..\remediate.ps1'),
+        '-DecisionPath', $decisionsPath,
+        '-ConfigPath', $configPath,
+        '-QuarantineRoot', $quarantine,
+        '-ScanRoot', $source,
+        '-TransactionManifestPath', $manifest,
+        '-Undo',
+        '-UndoSourcePathFile', $undoList
+    ) -Wait -PassThru -NoNewWindow -RedirectStandardOutput $fileUndoOut -RedirectStandardError $fileUndoErr
+    if ($fileUndo.ExitCode -ne 0) {
+        throw "powershell.exe -File selective undo failed: $((Get-Content -LiteralPath $fileUndoErr -Raw))"
+    }
+    if (-not (Test-Path -LiteralPath $move) -or (Test-Path -LiteralPath $movedDestination)) {
+        throw 'powershell.exe -File selective undo did not restore the requested file.'
+    }
+    if (-not (Test-Path -LiteralPath $collisionDestination)) {
+        throw 'powershell.exe -File selective undo restored an unrequested file.'
+    }
+
     $staleFile = Get-Item $stale
+    $staleExpectedSize = $staleFile.Length
+    $staleExpectedModifiedTimeUtc = $staleFile.LastWriteTimeUtc.ToString('o')
     'changed' | Add-Content $stale
     $staleDecision = @([ordered]@{ path = $stale; action = 'quarantine-requested' })
     $staleDecision | ConvertTo-Json | Set-Content $decisionsPath -Encoding UTF8
-    $staleInput = [ordered]@{ schemaVersion = 1; source = 'classifier'; scanRoot = $source; groups = @([ordered]@{ groupId = 'stale'; suggestedKeepPath = ''; items = @([ordered]@{ path = $stale; size = $staleFile.Length; modifiedTime = $staleFile.LastWriteTimeUtc.ToString('o'); protected = $false }) }) }
+    $staleInput = [ordered]@{ schemaVersion = 1; source = 'classifier'; scanRoot = $source; groups = @([ordered]@{ groupId = 'stale'; suggestedKeepPath = ''; items = @([ordered]@{ path = $stale; size = $staleExpectedSize; modifiedTime = $staleExpectedModifiedTimeUtc; protected = $false }) }) }
     $stalePath = Join-Path $root 'stale.json'
     $staleInput | ConvertTo-Json -Depth 10 | Set-Content $stalePath -Encoding UTF8
     $staleResult = & (Join-Path $PSScriptRoot '..\remediate.ps1') -InputPath $stalePath -DecisionPath $decisionsPath -ConfigPath $configPath -QuarantineRoot $quarantine -TransactionManifestPath $manifest -Apply
@@ -118,7 +160,9 @@ try {
         Write-Warning 'Permission-denied move test skipped: icacls.exe is unavailable.'
     }
 
-    $undo = & (Join-Path $PSScriptRoot '..\remediate.ps1') -DecisionPath $decisionsPath -TransactionManifestPath $manifest -Undo
+    $remainingUndo = Join-Path $root 'undo-remaining.txt'
+    @($collisionSource, $sameShare) | Set-Content -LiteralPath $remainingUndo -Encoding UTF8
+    $undo = & (Join-Path $PSScriptRoot '..\remediate.ps1') -DecisionPath $decisionsPath -TransactionManifestPath $manifest -Undo -UndoSourcePathFile $remainingUndo
     if (-not (Test-Path $move) -or -not (Test-Path $collisionSource)) { throw "Undo did not restore the quarantined files. move=$move exists=$(Test-Path $move); collision=$collisionSource exists=$(Test-Path $collisionSource)" }
 
     Write-Host 'Phase 6 remediation tests passed.'

@@ -9,3 +9,13 @@ reports/
 tools/czkawka/config.local.json
 tools/czkawka/bin/
 tools/czkawka/tests/temp/
+
+# .NET / Visual Studio
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userosscache
+project.lock.json
+TestResults/

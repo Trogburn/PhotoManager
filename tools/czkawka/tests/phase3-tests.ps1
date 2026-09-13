@@ -67,12 +67,79 @@ try {
         throw 'Sidecar metadata was unexpectedly treated as capture-date evidence.'
     }
 
+    $manualUtcFile = Join-Path $root 'manual-utc-choice.txt'
+    'manual utc' | Set-Content -Path $manualUtcFile -Encoding UTF8
+    $manualUtcReview = Join-Path $root 'manual-utc-review.json'
+    $manualUtcDecision = Join-Path $root 'manual-utc-decision.json'
+    $manualUtcManifest = Join-Path $root 'manual-utc-undo.jsonl'
+    $manualUtcApply = Join-Path $root 'manual-utc-apply.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $manualUtcFile -OutputPath $manualUtcReview | Out-Null
+    @(
+        [ordered]@{
+            path = [System.IO.Path]::GetFullPath($manualUtcFile)
+            action = 'manual'
+            date = '2022-01-02T09:04:05.0000000Z'
+        }
+    ) | ConvertTo-Json | Set-Content -Path $manualUtcDecision -Encoding UTF8
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -ReviewPath $manualUtcReview -DecisionPath $manualUtcDecision -OutputPath $manualUtcApply -Apply -UndoManifestPath $manualUtcManifest | Out-Null
+    $manualUtcApplied = Get-Item -LiteralPath $manualUtcFile
+    $expectedManualUtc = [datetime]::SpecifyKind([datetime]'2022-01-02T09:04:05', [DateTimeKind]::Utc)
+    if ($manualUtcApplied.CreationTimeUtc -ne $expectedManualUtc) {
+        throw "Manual UTC decision was shifted. creationUtc=$($manualUtcApplied.CreationTimeUtc.ToString('o'))"
+    }
+    $manualUtcReport = Get-Content -LiteralPath $manualUtcApply -Raw | ConvertFrom-Json
+    $manualUtcItem = @($manualUtcReport.items)[0]
+    $manualProposed = [datetimeoffset]$manualUtcItem.proposedCaptureTimeUtc
+    if ($manualProposed.UtcDateTime -ne $expectedManualUtc) {
+        throw "Manual UTC proposal was rewritten with a local offset. proposed=$($manualUtcItem.proposedCaptureTimeUtc)"
+    }
+
     $exifPath = Join-Path $root '2023-02-03_exif-tag.jpg'
     $exifReportPath = Join-Path $root 'exif-review.json'
     & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $exifPath -OutputPath $exifReportPath | Out-Null
     $exifItem = @((Get-Content -Path $exifReportPath -Raw | ConvertFrom-Json).items)[0]
     if ($exifItem.source -ne 'exif-DateTimeOriginal' -or $exifItem.status -ne 'Conflict') {
         throw 'EXIF precedence or filename conflict handling failed.'
+    }
+
+    $agreeSource = Join-Path $root 'agree-source.jpg'
+    $agreePath = Join-Path $root 'IMG_20200716_181233.jpg'
+    $agreeBitmap = New-Object System.Drawing.Bitmap 1, 1
+    $agreeBitmap.SetPixel(0, 0, [System.Drawing.Color]::White)
+    $agreeBitmap.Save($agreeSource, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+    $agreeBitmap.Dispose()
+    $agreeImage = [System.Drawing.Image]::FromFile($agreeSource)
+    try {
+        $dateProperty = [Runtime.Serialization.FormatterServices]::GetUninitializedObject([System.Drawing.Imaging.PropertyItem])
+        $dateProperty.Id = 0x9003
+        $dateProperty.Type = 2
+        $dateProperty.Value = [Text.Encoding]::ASCII.GetBytes("2020:07:16 18:12:33`0")
+        $dateProperty.Len = $dateProperty.Value.Length
+        $agreeImage.SetPropertyItem($dateProperty)
+        $offsetProperty = [Runtime.Serialization.FormatterServices]::GetUninitializedObject([System.Drawing.Imaging.PropertyItem])
+        $offsetProperty.Id = 0x9011
+        $offsetProperty.Type = 2
+        $offsetProperty.Value = [Text.Encoding]::ASCII.GetBytes("-04:00`0")
+        $offsetProperty.Len = $offsetProperty.Value.Length
+        $agreeImage.SetPropertyItem($offsetProperty)
+        $agreeImage.Save($agreePath, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+    }
+    finally {
+        $agreeImage.Dispose()
+    }
+    $agreeReportPath = Join-Path $root 'agreeing-clock-review.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $agreePath -OutputPath $agreeReportPath | Out-Null
+    $agreeItem = @((Get-Content -Path $agreeReportPath -Raw | ConvertFrom-Json).items)[0]
+    if ($agreeItem.status -eq 'Conflict') {
+        throw 'Matching EXIF and filename clocks were treated as a timezone conflict.'
+    }
+    if ($agreeItem.source -ne 'exif-DateTimeOriginal' -or $agreeItem.status -notin @('Proposed', 'AlreadyApplied')) {
+        throw "Agreeing EXIF/filename clocks produced $($agreeItem.status) from $($agreeItem.source)."
+    }
+    $agreeExif = @($agreeItem.evidenceComparison | Where-Object label -eq 'EXIF')[0]
+    $agreeName = @($agreeItem.evidenceComparison | Where-Object label -eq 'Filename')[0]
+    if ($agreeExif.utc -ne $agreeName.utc) {
+        throw "Agreeing clocks kept different UTC instants. exif=$($agreeExif.utc) filename=$($agreeName.utc)"
     }
 
     $savedReviewFile = Join-Path $root '2024-06-07_saved-review.txt'
@@ -87,6 +154,18 @@ try {
         throw 'Saved review approval did not apply or create an undo manifest.'
     }
     & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Undo -UndoManifestPath $savedManifest | Out-Null
+
+    $prettyFile = Join-Path $root '2024-06-07_pretty-undo.txt'
+    'pretty undo' | Set-Content -Path $prettyFile -Encoding UTF8
+    $prettyReview = Join-Path $root 'pretty-review.json'
+    $prettyManifest = Join-Path $root 'pretty-undo.jsonl'
+    $prettyDecision = Join-Path $root 'pretty-decision.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $prettyFile -OutputPath $prettyReview | Out-Null
+    @([ordered]@{ path = [System.IO.Path]::GetFullPath($prettyFile); action = 'approve' }) | ConvertTo-Json | Set-Content -Path $prettyDecision -Encoding UTF8
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -ReviewPath $prettyReview -DecisionPath $prettyDecision -OutputPath (Join-Path $root 'pretty-apply.json') -Apply -UndoManifestPath $prettyManifest | Out-Null
+    $prettyEntry = Get-Content -LiteralPath $prettyManifest | Where-Object { $_ } | Select-Object -First 1 | ConvertFrom-Json
+    $prettyEntry | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $prettyManifest -Encoding UTF8
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Undo -UndoManifestPath $prettyManifest | Out-Null
 
     $staleFile = Join-Path $root '2024-07-08_stale.txt'
     'before' | Set-Content -Path $staleFile -Encoding UTF8
@@ -150,6 +229,29 @@ try {
     $bothExifItem = @((Get-Content -Path $bothExifReport -Raw | ConvertFrom-Json).items)[0]
     if ($bothExifItem.status -ne 'Conflict') {
         throw "Original vs digitized EXIF mismatch was not a conflict. status=$($bothExifItem.status)"
+    }
+
+    $minuteTolerancePath = Join-Path $root '2022-01-02_030406.jpg'
+    $localOffset = [TimeZoneInfo]::Local.GetUtcOffset([datetime]'2022-01-02T03:04:05').ToString('hh\:mm')
+    if ([TimeZoneInfo]::Local.GetUtcOffset([datetime]'2022-01-02T03:04:05').Ticks -ge 0) { $localOffset = "+$localOffset" } else { $localOffset = "-$localOffset" }
+    New-ExifJpeg -Path $minuteTolerancePath -Tags @{ 0x9003 = '2022:01:02 03:04:05'; 0x9011 = $localOffset }
+    $minuteToleranceReport = Join-Path $root 'minute-tolerance-review.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $minuteTolerancePath -OutputPath $minuteToleranceReport | Out-Null
+    $minuteToleranceItem = @((Get-Content -Path $minuteToleranceReport -Raw | ConvertFrom-Json).items)[0]
+    if ($minuteToleranceItem.status -ne 'Proposed' -or $minuteToleranceItem.source -ne 'exif-DateTimeOriginal') {
+        throw "Equivalent mixed-timezone evidence with a one-second difference was not proposed. status=$($minuteToleranceItem.status)"
+    }
+
+    $pixelPath = Join-Path $root 'PXL_20201225_144114.jpg'
+    New-ExifJpeg -Path $pixelPath -Tags @{ 0x9003 = '2020:12:25 08:41:14'; 0x9011 = '-06:00' }
+    $pixelReport = Join-Path $root 'pixel-utc-filename-review.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $pixelPath -OutputPath $pixelReport | Out-Null
+    $pixelItem = @((Get-Content -Path $pixelReport -Raw | ConvertFrom-Json).items)[0]
+    if ($pixelItem.status -eq 'Conflict') {
+        throw 'Pixel UTC filename vs local EXIF within 24 hours was treated as a conflict.'
+    }
+    if ($pixelItem.source -ne 'exif-DateTimeOriginal' -or $pixelItem.status -notin @('Proposed', 'AlreadyApplied')) {
+        throw "Pixel UTC filename vs local EXIF produced $($pixelItem.status) from $($pixelItem.source)."
     }
 
     $cameraFile = Join-Path $root 'PXL_20240102_153045.txt'
@@ -240,6 +342,7 @@ try {
     }
     $batchApply = Join-Path $root 'batch-apply.json'
     $batchManifest = Join-Path $root 'batch-undo.jsonl'
+    $batchHashBefore = (Get-FileHash -LiteralPath $batchPath -Algorithm SHA256).Hash
     & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $batchPath -OutputPath $batchApply -Apply -ApproveHighConfidence -UndoManifestPath $batchManifest | Out-Null
     if (-not (Test-Path -LiteralPath $batchManifest)) {
         throw 'High-confidence batch approval did not write an undo manifest.'
@@ -248,7 +351,32 @@ try {
     if ($batchAfter.ToString('o') -eq $batchBefore.ToString('o')) {
         throw 'High-confidence batch approval did not update CreationTime.'
     }
+    $appliedItem = @((Get-Content -Path $batchApply -Raw | ConvertFrom-Json).items)[0]
+    $appliedProposedUtc = if ($appliedItem.proposedCaptureTimeUtc -is [datetime]) {
+        ([datetime]$appliedItem.proposedCaptureTimeUtc).ToUniversalTime()
+    }
+    else {
+        [datetimeoffset]::Parse([string]$appliedItem.proposedCaptureTimeUtc, [Globalization.CultureInfo]::InvariantCulture).UtcDateTime
+    }
+    if (-not (Test-Path -LiteralPath $batchApply) -or
+        [math]::Abs(($batchAfter.ToUniversalTime() - $appliedProposedUtc).TotalSeconds) -gt 1) {
+        throw "Apply did not leave CreationTime at the proposed date. actual=$($batchAfter.ToString('o')) proposed=$($appliedProposedUtc.ToString('o'))"
+    }
+    $batchRescan = Join-Path $root 'batch-rescan.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $batchPath -OutputPath $batchRescan | Out-Null
+    $batchRescanItem = @((Get-Content -Path $batchRescan -Raw | ConvertFrom-Json).items)[0]
+    if ($batchRescanItem.status -ne 'AlreadyApplied' -or $batchRescanItem.decisionSummary -notlike '*Already applied*') {
+        throw "Rescan after apply did not mark the file already applied. status=$($batchRescanItem.status) summary=$($batchRescanItem.decisionSummary)"
+    }
     & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Undo -UndoManifestPath $batchManifest | Out-Null
+    $batchAfterUndo = Get-Item -LiteralPath $batchPath
+    $batchHashAfterUndo = (Get-FileHash -LiteralPath $batchPath -Algorithm SHA256).Hash
+    if ($batchHashAfterUndo -ne $batchHashBefore) {
+        throw 'Undo changed file bytes.'
+    }
+    if ([math]::Abs(($batchAfterUndo.CreationTimeUtc - $batchBefore).TotalSeconds) -gt 1) {
+        throw "Undo did not restore CreationTime. actual=$($batchAfterUndo.CreationTimeUtc.ToString('o')) expected=$($batchBefore.ToString('o'))"
+    }
 
     Write-Host 'Phase 3 evidence tests passed.'
 }

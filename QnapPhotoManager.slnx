@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/QnapPhotoManager.Tests/QnapPhotoManager.Tests.csproj" />
+    <Project Path="src/QnapPhotoManager.UiTests/QnapPhotoManager.UiTests.csproj" />
+    <Project Path="src/QnapPhotoManager/QnapPhotoManager.csproj" />
+  </Folder>
+</Solution>

@@ -9,7 +9,7 @@ Build a low-maintenance Windows workflow around the unchanged Czkawka CLI. The C
 - Add a pinned Czkawka CLI download/install script for Windows and a local configuration file containing the executable path, UNC scan root, local report root, and scan defaults.
 - Add a scan script that validates the UNC path, runs `dup` and `image` separately in read-only mode with compact JSON, captures stderr/warnings, command metadata, CLI version, timestamps, exit status, and raw outputs.
 - Treat exit codes `0` and `11` as successful scans; fail on argument/process/path errors. Keep `-W` and `-N`; do not suppress diagnostics with `-M` during the initial implementation. Support a `-Fresh` switch mapping to `-H`; otherwise retain Czkawka cache.
-- Start with exact-content duplicates via `dup -s hash` and visually similar images via `image` using conservative defaults: hash size 16, threshold around 5-10, Gradient algorithm, and geometric invariance off. Keep separate commands/config for later size/name duplicate modes if needed.
+- Start with exact-content duplicates via `dup -s hash` and visually similar images via `image` using calibrated defaults: hash size 16, threshold 16, Blockhash algorithm, and geometric invariance off. Keep separate commands/config for later size/name duplicate modes if needed.
 - Verify against a small local fixture first, then a mapped/UNC network folder, and confirm raw JSON and logs are preserved locally.
 
 ### 2. Stable local result model
@@ -97,7 +97,7 @@ Build a low-maintenance Windows workflow around the unchanged Czkawka CLI. The C
 - Use a native reviewer for actions and static HTML/JSON for report portability. Do not depend on a browser being allowed to manipulate UNC files.
 - Keep confidence explainable and advisory. No automatic deletion, timestamp changes, or automatic keep decisions.
 - Treat capture time and filesystem time as separate concepts; default to changing Windows CreationTime for album sorting while preserving LastWriteTime unless the user explicitly selects a different policy.
-- Naive EXIF and filename timestamps are unspecified local time. Explicit offsets and Zulu timestamps convert to UTC. Mixed timezone kinds and disagreeing instants are conflicts, not guesses.
+- Naive EXIF and filename timestamps are unspecified local time. Explicit offsets and Zulu timestamps convert to UTC. Capture evidence within 59 seconds is equivalent; otherwise, disagreeing UTC instants are conflicts, not guesses.
 - High-confidence EXIF batch apply requires `-ApproveHighConfidence` in addition to `-Apply`. Individual items still use approve paths or a decision file.
 - Start with `dup` hash mode and `image`; add name/size modes only if real scan results show a useful gap.
 
