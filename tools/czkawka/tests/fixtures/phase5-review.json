@@ -1,0 +1,202 @@
+﻿{
+  "schemaVersion": 1,
+  "source": "classifier",
+  "inputPath": "classifier-input.json",
+  "groupCount": 3,
+  "groups": [
+    {
+      "groupId": "review-0001",
+      "confidenceTier": "Very high",
+      "labels": [
+        "cross-folder match",
+        "downloaded copy",
+        "exact duplicate",
+        "filename variant",
+        "resized copy"
+      ],
+      "explanation": {
+        "perceptualDifferenceMinimum": 0.5,
+        "dimensionAreaRatio": 0.25,
+        "evidenceGroupIds": [
+          "dup-001",
+          "image-001"
+        ],
+        "evidenceEdges": [
+          {
+            "sourceGroupId": "dup-001",
+            "source": "czkawka",
+            "kind": "duplicate",
+            "paths": [
+              "\\\\server\\photos\\Incoming\\copy.jpg",
+              "\\\\server\\photos\\Keep\\2024-01-01-original.jpg"
+            ]
+          },
+          {
+            "sourceGroupId": "image-001",
+            "source": "czkawka",
+            "kind": "similar-image",
+            "paths": [
+              "\\\\server\\photos\\Incoming\\copy.jpg",
+              "\\\\server\\photos\\Incoming\\resized.jpg"
+            ]
+          }
+        ]
+      },
+      "suggestedKeepPath": "\\\\server\\photos\\Keep\\2024-01-01-original.jpg",
+      "recommendationReason": "Dimension, size, and filename quality signals.",
+      "items": [
+        {
+          "path": "\\\\server\\photos\\Incoming\\copy.jpg",
+          "size": 5000,
+          "modifiedTime": null,
+          "hash": "same-hash",
+          "width": 2000,
+          "height": 1500,
+          "perceptualDifference": null,
+          "isReference": false,
+          "referenceState": "not-set",
+          "protected": false,
+          "advisoryAction": "review"
+        },
+        {
+          "path": "\\\\server\\photos\\Incoming\\resized.jpg",
+          "size": 1200,
+          "modifiedTime": null,
+          "hash": null,
+          "width": 1000,
+          "height": 750,
+          "perceptualDifference": 0.5,
+          "isReference": false,
+          "referenceState": "not-set",
+          "protected": false,
+          "advisoryAction": "review"
+        },
+        {
+          "path": "\\\\server\\photos\\Keep\\2024-01-01-original.jpg",
+          "size": 5000,
+          "modifiedTime": null,
+          "hash": "same-hash",
+          "width": 2000,
+          "height": 1500,
+          "perceptualDifference": null,
+          "isReference": false,
+          "referenceState": "not-set",
+          "protected": false,
+          "advisoryAction": "keep"
+        }
+      ]
+    },
+    {
+      "groupId": "review-0002",
+      "confidenceTier": "Medium",
+      "labels": [
+        "cross-folder match",
+        "downloaded copy",
+        "likely thumbnail"
+      ],
+      "explanation": {
+        "perceptualDifferenceMinimum": 4.0,
+        "dimensionAreaRatio": 0.01,
+        "evidenceGroupIds": [
+          "image-002"
+        ],
+        "evidenceEdges": [
+          {
+            "sourceGroupId": "image-002",
+            "source": "czkawka",
+            "kind": "similar-image",
+            "paths": [
+              "\\\\server\\photos\\Incoming\\thumbnail.jpg",
+              "\\\\server\\photos\\Reference\\original.jpg"
+            ]
+          }
+        ]
+      },
+      "suggestedKeepPath": "\\\\server\\photos\\Reference\\original.jpg",
+      "recommendationReason": "Reference/protected item is retained; recommendation is advisory.",
+      "items": [
+        {
+          "path": "\\\\server\\photos\\Incoming\\thumbnail.jpg",
+          "size": 200,
+          "modifiedTime": null,
+          "hash": null,
+          "width": 240,
+          "height": 180,
+          "perceptualDifference": 4,
+          "isReference": false,
+          "referenceState": "candidate",
+          "protected": false,
+          "advisoryAction": "review"
+        },
+        {
+          "path": "\\\\server\\photos\\Reference\\original.jpg",
+          "size": 9000,
+          "modifiedTime": null,
+          "hash": null,
+          "width": 2400,
+          "height": 1800,
+          "perceptualDifference": 4,
+          "isReference": true,
+          "referenceState": "reference",
+          "protected": true,
+          "advisoryAction": "keep"
+        }
+      ]
+    },
+    {
+      "groupId": "review-0003",
+      "confidenceTier": "Review carefully",
+      "labels": [
+        "downloaded copy"
+      ],
+      "explanation": {
+        "perceptualDifferenceMinimum": 12.0,
+        "dimensionAreaRatio": 1.0,
+        "evidenceGroupIds": [
+          "image-003"
+        ],
+        "evidenceEdges": [
+          {
+            "sourceGroupId": "image-003",
+            "source": "czkawka",
+            "kind": "similar-image",
+            "paths": [
+              "C:\\Users\\Public\\Pictures\\weak-a.jpg",
+              "C:\\Users\\Public\\Pictures\\weak-b.jpg"
+            ]
+          }
+        ]
+      },
+      "suggestedKeepPath": "C:\\Users\\Public\\Pictures\\weak-a.jpg",
+      "recommendationReason": "Dimension, size, and filename quality signals.",
+      "items": [
+        {
+          "path": "C:\\Users\\Public\\Pictures\\weak-a.jpg",
+          "size": 300,
+          "modifiedTime": null,
+          "hash": null,
+          "width": 800,
+          "height": 600,
+          "perceptualDifference": 12,
+          "isReference": false,
+          "referenceState": "not-set",
+          "protected": false,
+          "advisoryAction": "keep"
+        },
+        {
+          "path": "C:\\Users\\Public\\Pictures\\weak-b.jpg",
+          "size": 280,
+          "modifiedTime": null,
+          "hash": null,
+          "width": 800,
+          "height": 600,
+          "perceptualDifference": 12,
+          "isReference": false,
+          "referenceState": "not-set",
+          "protected": false,
+          "advisoryAction": "review"
+        }
+      ]
+    }
+  ]
+}

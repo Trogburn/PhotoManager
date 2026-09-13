@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $root = Join-Path ([System.IO.Path]::GetTempPath()) "qnap-phase5-$([guid]::NewGuid().ToString('N'))"
 New-Item -Path $root -ItemType Directory -Force | Out-Null
 try {
-    $fixture = Join-Path $PSScriptRoot 'fixtures\phase5-review.local.json'
+    $fixture = Join-Path $PSScriptRoot 'fixtures\phase5-review.json'
     $fixtureBefore = (Get-FileHash -LiteralPath $fixture -Algorithm SHA256).Hash
     $input = Join-Path $root 'classified.json'
     $decisions = Join-Path $root 'decisions.json'
