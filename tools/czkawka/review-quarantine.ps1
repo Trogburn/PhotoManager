@@ -9,11 +9,13 @@ param(
 )
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'common-scan-id.ps1')
 function JsonArray([string]$p) { @((Get-Content $p -Raw | ConvertFrom-Json) | Write-Output) }
 function Save { @($audit.Values) | ConvertTo-Json | Set-Content $AuditDecisionPath -Encoding UTF8 }
 $classified=Get-Content $InputPath -Raw|ConvertFrom-Json
 $decisions=JsonArray $DecisionPath
-$moved=@(Get-Content $TransactionManifestPath|ForEach-Object{$_|ConvertFrom-Json}|Where-Object status -eq moved)
+$resolvedScanId=Get-ResolvedScanId -Classified $classified -ClassifiedPath $InputPath
+$moved=@(Select-TransactionHistoryForScan -History @(Get-Content $TransactionManifestPath|ForEach-Object{$_|ConvertFrom-Json}) -ScanId $resolvedScanId|Where-Object status -eq moved)
 $audit=@{}; if(Test-Path $AuditDecisionPath){foreach($d in JsonArray $AuditDecisionPath){$audit[$d.source]=$d}}
 $items=@()
 foreach($entry in $moved){

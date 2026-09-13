@@ -160,7 +160,9 @@ try {
         Write-Warning 'Permission-denied move test skipped: icacls.exe is unavailable.'
     }
 
-    $undo = & (Join-Path $PSScriptRoot '..\remediate.ps1') -DecisionPath $decisionsPath -TransactionManifestPath $manifest -Undo
+    $remainingUndo = Join-Path $root 'undo-remaining.txt'
+    @($collisionSource, $sameShare) | Set-Content -LiteralPath $remainingUndo -Encoding UTF8
+    $undo = & (Join-Path $PSScriptRoot '..\remediate.ps1') -DecisionPath $decisionsPath -TransactionManifestPath $manifest -Undo -UndoSourcePathFile $remainingUndo
     if (-not (Test-Path $move) -or -not (Test-Path $collisionSource)) { throw "Undo did not restore the quarantined files. move=$move exists=$(Test-Path $move); collision=$collisionSource exists=$(Test-Path $collisionSource)" }
 
     Write-Host 'Phase 6 remediation tests passed.'

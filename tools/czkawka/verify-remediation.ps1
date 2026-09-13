@@ -16,6 +16,7 @@ if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
     $ConfigPath = Join-Path $PSScriptRoot 'config.json'
 }
 . (Join-Path $PSScriptRoot 'common-hash.ps1')
+. (Join-Path $PSScriptRoot 'common-scan-id.ps1')
 
 function Get-Value { param([object]$Object, [string]$Name) if ($null -eq $Object -or $null -eq $Object.PSObject.Properties[$Name]) { return $null }; $Object.PSObject.Properties[$Name].Value }
 function Get-JsonArray { param([string]$Path) return @((Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json) | Write-Output) }
@@ -30,7 +31,12 @@ New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 $classified = Get-Content -LiteralPath $InputPath -Raw | ConvertFrom-Json
 if ($classified.schemaVersion -ne 1 -or $classified.source -ne 'classifier') { throw 'InputPath must be a schema version 1 classifier document.' }
 $decisions = Get-JsonArray $DecisionPath
-$history = @(Get-Content -LiteralPath $TransactionManifestPath | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json })
+$resolvedScanId = Get-ResolvedScanId -Classified $classified -ClassifiedPath $InputPath
+$history = @(
+    Select-TransactionHistoryForScan `
+        -History @(Get-Content -LiteralPath $TransactionManifestPath | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json }) `
+        -ScanId $resolvedScanId
+)
 $latestBySource = @{}
 foreach ($entry in $history) {
     $latestBySource[[string]$entry.source] = $entry
@@ -105,6 +111,7 @@ $post = & (Join-Path $PSScriptRoot 'run-workflow.ps1') -ScanRoot $ScanRoot -Conf
 $postClassified = Get-Content -LiteralPath $post.classifiedPath -Raw | ConvertFrom-Json
 $report = [ordered]@{
     schemaVersion = 1; verifiedAtUtc = (Get-Date).ToUniversalTime().ToString('o'); passed = ($failures.Count -eq 0)
+    scanId = $resolvedScanId
     scanRoot = $ScanRoot; quarantineRoot = $QuarantineRoot; expectedMoveCount = $expected.Count; transactionCount = $transactions.Count
     undoneCount = $undoneSources.Count
     keeperCount = $keepers.Count; deferredFileCount = $deferred.Count; postScanDirectory = $post.scanDirectory; postScanGroupCount = @($postClassified.groups).Count

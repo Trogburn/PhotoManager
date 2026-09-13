@@ -28,7 +28,10 @@ param(
     [string[]]$UndoSourcePath,
 
     [Parameter()]
-    [string]$UndoSourcePathFile
+    [string]$UndoSourcePathFile,
+
+    [Parameter()]
+    [string]$ScanId
 )
 
 Set-StrictMode -Version Latest
@@ -37,6 +40,7 @@ if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
     $ConfigPath = Join-Path $PSScriptRoot 'config.json'
 }
 . (Join-Path $PSScriptRoot 'common-hash.ps1')
+. (Join-Path $PSScriptRoot 'common-scan-id.ps1')
 
 function Get-Value {
     param([object]$Value, [string]$Name)
@@ -120,14 +124,11 @@ $decisions = @((Get-Content -LiteralPath $DecisionPath -Raw | ConvertFrom-Json) 
 if ($Undo) {
     if (-not (Test-Path -LiteralPath $TransactionManifestPath)) { throw "Transaction manifest not found: $TransactionManifestPath" }
     $history = @(Get-Content -LiteralPath $TransactionManifestPath | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json })
-    $undone = @{}
-    foreach ($entry in @($history | Where-Object { $_.status -eq 'undone' })) {
-        $undone["$($entry.source)|$($entry.destination)"] = $true
+    $resolvedScanId = $ScanId
+    if ([string]::IsNullOrWhiteSpace($resolvedScanId) -and -not [string]::IsNullOrWhiteSpace($InputPath) -and (Test-Path -LiteralPath $InputPath)) {
+        $classifiedForScope = Get-Content -LiteralPath $InputPath -Raw | ConvertFrom-Json
+        $resolvedScanId = Get-ResolvedScanId -Classified $classifiedForScope -ClassifiedPath $InputPath
     }
-    $entries = @($history | Where-Object {
-        $_.status -eq 'moved' -and -not $undone.ContainsKey("$($_.source)|$($_.destination)")
-    })
-    $alreadyUndoneCount = @($history | Where-Object { $_.status -eq 'moved' -and $undone.ContainsKey("$($_.source)|$($_.destination)") }).Count
     $requestedPaths = New-Object System.Collections.Generic.List[string]
     foreach ($path in @($UndoSourcePath)) {
         if (-not [string]::IsNullOrWhiteSpace([string]$path)) {
@@ -144,6 +145,17 @@ if ($Undo) {
             }
         }
     }
+    if ($requestedPaths.Count -eq 0 -or -not [string]::IsNullOrWhiteSpace($resolvedScanId)) {
+        $history = @(Select-TransactionHistoryForScan -History $history -ScanId $resolvedScanId -RequireScanId:($requestedPaths.Count -eq 0))
+    }
+    $undone = @{}
+    foreach ($entry in @($history | Where-Object { $_.status -eq 'undone' })) {
+        $undone["$($entry.source)|$($entry.destination)"] = $true
+    }
+    $entries = @($history | Where-Object {
+        $_.status -eq 'moved' -and -not $undone.ContainsKey("$($_.source)|$($_.destination)")
+    })
+    $alreadyUndoneCount = @($history | Where-Object { $_.status -eq 'moved' -and $undone.ContainsKey("$($_.source)|$($_.destination)") }).Count
     if ($requestedPaths.Count -gt 0) {
         $requested = @{}
         foreach ($path in $requestedPaths) { $requested[[IO.Path]::GetFullPath($path)] = $true }
@@ -177,11 +189,17 @@ if ($Undo) {
         if ($null -eq $expected -or $restored.Length -ne [long]$expected.size -or $restoredHash -ne [string]$expected.sha256) {
             throw "Undo verification failed; restored file does not match pre-move evidence: $($entry.source)"
         }
+        $entryScanId = if ($null -ne $entry.PSObject.Properties['scanId'] -and -not [string]::IsNullOrWhiteSpace([string]$entry.scanId)) {
+            [string]$entry.scanId
+        } else {
+            $resolvedScanId
+        }
         Add-Transaction ([ordered]@{
             status = 'undone'
             source = $entry.source
             destination = $entry.destination
             transactionUtc = (Get-Date).ToUniversalTime().ToString('o')
+            scanId = $entryScanId
             verificationPassed = $true
             restored = Get-FileEvidence -File $restored
         })
@@ -194,6 +212,7 @@ if ([string]::IsNullOrWhiteSpace($InputPath)) { throw '-InputPath is required un
 if (-not (Test-Path -LiteralPath $InputPath)) { throw "Classified input not found: $InputPath" }
 $classified = Get-Content -LiteralPath $InputPath -Raw | ConvertFrom-Json
 if ($classified.schemaVersion -ne 1 -or $classified.source -ne 'classifier') { throw 'Input must be a schema version 1 classifier document.' }
+$resolvedScanId = if (-not [string]::IsNullOrWhiteSpace($ScanId)) { $ScanId.Trim() } else { Get-ResolvedScanId -Classified $classified -ClassifiedPath $InputPath }
 $quarantinePath = [IO.Path]::GetFullPath($QuarantineRoot)
 $scanRootValue = if ($ScanRoot) { $ScanRoot } else { [string](Get-Value $classified 'scanRoot') }
 $itemsByPath = @{}
@@ -252,7 +271,7 @@ foreach ($path in @($itemsByPath.Keys | Sort-Object)) {
         action = 'quarantine'
         reason = 'explicit-review-request'
         reviewerAction = 'quarantine-requested'
-        scanId = Get-Value $classified 'scanId'
+        scanId = $resolvedScanId
         transactionUtc = (Get-Date).ToUniversalTime().ToString('o')
         status = if ($Apply) { 'moved' } else { 'dry-run' }
         preMove = $beforeMove

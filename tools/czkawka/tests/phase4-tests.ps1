@@ -20,6 +20,9 @@ try {
     }
 
     $data = $first | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace([string]$data.scanId)) {
+        throw 'Classifier output did not stamp a scanId.'
+    }
     if ($data.groupCount -ne 3) {
         throw "Expected 3 review groups, got $($data.groupCount)"
     }

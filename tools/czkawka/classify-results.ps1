@@ -10,6 +10,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'common-scan-id.ps1')
 
 if (-not (Test-Path -LiteralPath $InputPath)) {
     throw "Normalized result file not found: $InputPath"
@@ -239,6 +240,7 @@ if ($outputDirectory -and -not (Test-Path -LiteralPath $outputDirectory)) { New-
 $output = [ordered]@{
     schemaVersion = 1
     source = 'classifier'
+    scanId = Get-ResolvedScanId -ClassifiedPath $OutputPath -InputPath $InputPath
     inputPath = [IO.Path]::GetFullPath($InputPath)
     groupCount = $reviewGroups.Count
     groups = @($reviewGroups)

@@ -97,8 +97,37 @@ try {
         -ConfigPath $configPath -OutputDirectory $verifyOutput -AllowLocalRoot
     Assert-Path (Join-Path $verifyOutput 'verification.json') 'Successful verification report'
     if (-not $verified.passed) { throw 'Successful remediation verification reported failure.' }
+    $verifyDoc = Get-Content -LiteralPath (Join-Path $verifyOutput 'verification.json') -Raw | ConvertFrom-Json
+    if ([string]::IsNullOrWhiteSpace([string]$verifyDoc.scanId)) {
+        throw 'Verification report did not record a scanId.'
+    }
 
-    & $remediate -DecisionPath $decisionsPath -TransactionManifestPath $manifestPath -Undo -UndoSourcePath $candidate
+    $leftoverSource = Join-Path $fixtureRoot 'leftover-other-scan.jpg'
+    $leftoverDest = Join-Path $quarantineRoot 'leftover-other-scan.jpg'
+    'poison leftover' | Set-Content -LiteralPath $leftoverDest -Encoding UTF8
+    $leftoverHash = (Get-FileHash -LiteralPath $leftoverDest -Algorithm SHA256).Hash.ToLowerInvariant()
+    $leftoverInfo = Get-Item -LiteralPath $leftoverDest
+    $leftoverEvidence = [ordered]@{
+        path = $leftoverDest
+        size = [long]$leftoverInfo.Length
+        lastWriteTimeUtc = $leftoverInfo.LastWriteTimeUtc.ToString('o')
+        sha256 = $leftoverHash
+    }
+    ([ordered]@{
+        status = 'moved'
+        source = $leftoverSource
+        destination = $leftoverDest
+        scanId = 'scan-20200101-000000'
+        transactionUtc = (Get-Date).ToUniversalTime().ToString('o')
+        preMove = $leftoverEvidence
+        postMove = $leftoverEvidence
+    } | ConvertTo-Json -Compress -Depth 8) | Add-Content -LiteralPath $manifestPath -Encoding UTF8
+    $verifiedWithLeftover = & $verify -InputPath $classifiedPath -DecisionPath $decisionsPath `
+        -TransactionManifestPath $manifestPath -ScanRoot $fixtureRoot -QuarantineRoot $quarantineRoot `
+        -ConfigPath $configPath -OutputDirectory (Join-Path $tempRoot 'verification-ignores-other-scan') -AllowLocalRoot
+    if (-not $verifiedWithLeftover.passed) { throw 'Verification treated another scan leftover as part of the current review.' }
+
+    & $remediate -DecisionPath $decisionsPath -TransactionManifestPath $manifestPath -InputPath $classifiedPath -Undo -UndoSourcePath $candidate
     $verifiedAfterUndo = & $verify -InputPath $classifiedPath -DecisionPath $decisionsPath `
         -TransactionManifestPath $manifestPath -ScanRoot $fixtureRoot -QuarantineRoot $quarantineRoot `
         -ConfigPath $configPath -OutputDirectory (Join-Path $tempRoot 'verification-after-undo') -AllowLocalRoot
