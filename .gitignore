@@ -18,3 +18,4 @@ obj/
 *.suo
 *.userosscache
 project.lock.json
+TestResults/
