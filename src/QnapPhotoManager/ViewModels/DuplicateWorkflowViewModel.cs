@@ -215,7 +215,16 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
                 throw new InvalidOperationException("Configure duplicates before loading undo history.");
             }
 
-            var entries = await _duplicates.ReadActiveTransactionsAsync(_duplicateConfig);
+            if (_duplicateArtifacts is null)
+            {
+                DuplicateUndoItems.Clear();
+                _host.SetStatus("Scan duplicates before loading undo history.");
+                _host.RaiseCommandStates();
+                return;
+            }
+
+            var scanId = await _duplicates.ReadScanIdAsync(_duplicateArtifacts.ClassifiedPath);
+            var entries = await _duplicates.ReadActiveTransactionsAsync(_duplicateConfig, scanId);
             DuplicateUndoItems.Clear();
             foreach (var entry in entries)
             {

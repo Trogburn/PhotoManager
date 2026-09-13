@@ -696,6 +696,63 @@ public sealed class DuplicateReviewValidationTests : TestBase
     }
 }
 
+public sealed class DuplicateTransactionScanScopeTests : TestBase
+{
+    [Fact]
+    public void ResolveScanIdPrefersClassifiedValueThenScanFolder()
+    {
+        Assert.Equal("scan-explicit", DuplicateWorkflowService.ResolveScanId(@"C:\reports\other\classified.json", "scan-explicit"));
+        Assert.Equal(
+            "scan-20260913-120000",
+            DuplicateWorkflowService.ResolveScanId(@"C:\reports\czkawka\scan-20260913-120000\classified.json", null));
+    }
+
+    [Fact]
+    public async Task ReadActiveTransactionsIgnoresOtherScanAndUnscopedLeftovers()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var quarantine = Path.Combine(root, "quarantine");
+            Directory.CreateDirectory(quarantine);
+            await File.WriteAllLinesAsync(Path.Combine(quarantine, "transactions.jsonl"),
+            [
+                """{"source":"C:\\leftover.jpg","destination":"C:\\q\\leftover.jpg","transactionUtc":"2026-01-01T00:00:00Z","status":"moved","scanId":"scan-old"}""",
+                """{"source":"C:\\unscoped.jpg","destination":"C:\\q\\unscoped.jpg","transactionUtc":"2026-01-02T00:00:00Z","status":"moved"}""",
+                """{"source":"C:\\current.jpg","destination":"C:\\q\\current.jpg","transactionUtc":"2026-01-03T00:00:00Z","status":"moved","scanId":"scan-new"}"""
+            ]);
+
+            var policy = new PathPolicy(root);
+            var service = new DuplicateWorkflowService(
+                new PowerShellScriptRunner(), new AtomicArtifactStore(policy), policy, root);
+            var config = new AppConfig { QuarantineRoot = quarantine };
+            var active = await service.ReadActiveTransactionsAsync(config, "scan-new");
+
+            var current = Assert.Single(active);
+            Assert.Equal(@"C:\current.jpg", current.Source);
+            Assert.Equal("scan-new", current.ScanId);
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public async Task ReadScanIdUsesClassifiedDocument()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var classified = Path.Combine(root, "classified.json");
+            await File.WriteAllTextAsync(classified, """{"schemaVersion":1,"source":"classifier","scanId":"scan-from-doc","groups":[]}""");
+            var policy = new PathPolicy(root);
+            var service = new DuplicateWorkflowService(
+                new PowerShellScriptRunner(), new AtomicArtifactStore(policy), policy, root);
+
+            Assert.Equal("scan-from-doc", await service.ReadScanIdAsync(classified));
+        }
+        finally { Delete(root); }
+    }
+}
+
 public abstract class TestBase
 {
     protected static string NewTempDirectory() => TestDirectory.NewTempDirectory();

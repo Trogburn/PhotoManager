@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using QnapPhotoManager.Models;
@@ -330,8 +331,21 @@ public sealed class DuplicateWorkflowService
         return reportPath;
     }
 
+    public async Task<string> ReadScanIdAsync(
+        string classifiedPath,
+        CancellationToken cancellationToken = default)
+    {
+        using var document = await ReadJsonAsync(classifiedPath, cancellationToken);
+        var stated = document.RootElement.TryGetProperty("scanId", out var scanId) &&
+                     scanId.ValueKind == JsonValueKind.String
+            ? scanId.GetString()
+            : null;
+        return ResolveScanId(classifiedPath, stated);
+    }
+
     public async Task<IReadOnlyList<DuplicateTransactionEntry>> ReadActiveTransactionsAsync(
         AppConfig config,
+        string scanId,
         CancellationToken cancellationToken = default)
     {
         var manifestPath = TransactionPath(config);
@@ -340,6 +354,7 @@ public sealed class DuplicateWorkflowService
             return [];
         }
 
+        var expectedScanId = string.IsNullOrWhiteSpace(scanId) ? string.Empty : scanId.Trim();
         var active = new List<DuplicateTransactionEntry>();
         var lineNumber = 0;
         await foreach (var line in File.ReadLinesAsync(manifestPath, cancellationToken))
@@ -363,6 +378,12 @@ public sealed class DuplicateWorkflowService
 
             if (entry is null || string.IsNullOrWhiteSpace(entry.Source) ||
                 string.IsNullOrWhiteSpace(entry.Destination))
+            {
+                continue;
+            }
+
+            var entryScanId = string.IsNullOrWhiteSpace(entry.ScanId) ? string.Empty : entry.ScanId.Trim();
+            if (!string.Equals(entryScanId, expectedScanId, StringComparison.Ordinal))
             {
                 continue;
             }
@@ -400,7 +421,8 @@ public sealed class DuplicateWorkflowService
         }
 
         EnsureArtifacts(artifacts);
-        var active = await ReadActiveTransactionsAsync(config, cancellationToken);
+        var scanId = await ReadScanIdAsync(artifacts.ClassifiedPath, cancellationToken);
+        var active = await ReadActiveTransactionsAsync(config, scanId, cancellationToken);
         var selected = selectedSourcePaths
             .Select(Path.GetFullPath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -421,17 +443,19 @@ public sealed class DuplicateWorkflowService
                 selectedEntries.Select(entry => entry.Source),
                 cancellationToken);
             var undoArguments = Args(
+                ("-InputPath", artifacts.ClassifiedPath),
                 ("-DecisionPath", artifacts.DecisionPath),
                 ("-QuarantineRoot", config.QuarantineRoot),
                 ("-ScanRoot", config.ScanRoot),
                 ("-ConfigPath", ConfigPath()),
                 ("-TransactionManifestPath", TransactionPath(config)),
+                ("-ScanId", scanId),
                 ("-Undo", null),
                 ("-UndoSourcePathFile", listPath),
                 null);
             var output = await RunScriptAsync("remediate.ps1", undoArguments, cancellationToken);
 
-            var remaining = await ReadActiveTransactionsAsync(config, cancellationToken);
+            var remaining = await ReadActiveTransactionsAsync(config, scanId, cancellationToken);
             var remainingKeys = remaining
                 .Select(entry => TransactionKey(entry.Source, entry.Destination))
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -599,6 +623,35 @@ public sealed class DuplicateWorkflowService
         !string.IsNullOrWhiteSpace(value) &&
         value.Length == 64 &&
         value.All(character => Uri.IsHexDigit(character));
+
+    internal static string ResolveScanId(string classifiedPath, string? classifiedScanId)
+    {
+        if (!string.IsNullOrWhiteSpace(classifiedScanId))
+        {
+            return classifiedScanId.Trim();
+        }
+
+        var fullPath = Path.GetFullPath(classifiedPath);
+        var parent = Path.GetFileName(Path.GetDirectoryName(fullPath));
+        if (!string.IsNullOrWhiteSpace(parent) &&
+            parent.StartsWith("scan-", StringComparison.OrdinalIgnoreCase))
+        {
+            return parent;
+        }
+
+        var normalizedParent = Path.GetFileName(Path.GetDirectoryName(fullPath));
+        var scanFolder = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(fullPath)));
+        if (string.Equals(normalizedParent, "normalized", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(scanFolder) &&
+            scanFolder.StartsWith("scan-", StringComparison.OrdinalIgnoreCase))
+        {
+            return scanFolder;
+        }
+
+        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(fullPath.ToLowerInvariant())))
+            .ToLowerInvariant();
+        return "classified-" + fingerprint[..12];
+    }
 
     private static string TransactionKey(string source, string destination) =>
         $"{Path.GetFullPath(source)}\n{Path.GetFullPath(destination)}";
