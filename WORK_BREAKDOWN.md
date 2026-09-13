@@ -182,6 +182,7 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - 2026-09-08: Penalized numbered filename suffixes such as `(2)` and `(3)` so unsuffixed base names win deterministic tie-breaks when content and dimensions match. Phase 4 regression tests passed; the real `100_0095` group now recommends `100_0095.JPG`.
 - 2026-09-08: Audit correction: hash-driven confidence, label boundary behavior, complete evidence retention, and broader threshold/path test matrices remain incomplete.
 - 2026-09-10: Completed the remaining Phase 4 gaps. Matching hashes now drive Very high confidence case-insensitively; repeated paths merge missing metadata while retaining per-entry evidence, warnings, access, and stale fields; protected/preferred path matching requires a directory boundary; and Phase 4 tests cover hash, perceptual thresholds, dimension-ratio boundaries, and protected-path matrices. `phase4-tests.ps1` and `phase2-tests.ps1` passed under PowerShell 7.6.5. Phase 5 was not advanced.
+- 2026-09-10: Golden-corpus validation drove calibrated Blockhash similarity matching (threshold 16), canonical camera-name tie-breaking before file size at equal resolution, and minute-level (59-second) date-evidence equivalence. The restricted 632-file lab corpus passed all 35 detection, classification, protection, exclusion, and date-review checks without media changes.
 
 ## Phase 5: Native Windows Review Experience
 
