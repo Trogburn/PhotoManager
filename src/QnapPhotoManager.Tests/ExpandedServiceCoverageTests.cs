@@ -138,10 +138,12 @@ public sealed class WorkflowStateMachineCoverageTests : TestBase
         workflow.SetSnapshotConfirmed(true);
         workflow.TransitionTo(WorkflowState.RemediationApplied);
         workflow.TransitionTo(WorkflowState.Completed);
+        workflow.TransitionTo(WorkflowState.RemediationApplied, "undo after verify");
+        workflow.TransitionTo(WorkflowState.Completed);
         workflow.TransitionTo(WorkflowState.Configured);
 
         Assert.Equal(WorkflowState.Configured, workflow.Session.State);
-        Assert.Equal(10, workflow.History.Count);
+        Assert.Equal(12, workflow.History.Count);
         Assert.Equal("scan-dir", workflow.Session.ScanArtifactPath);
         Assert.Equal("review.json", workflow.Session.ReviewArtifactPath);
         Assert.False(workflow.Session.SnapshotConfirmed);

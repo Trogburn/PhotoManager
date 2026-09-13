@@ -46,7 +46,8 @@ public sealed record DuplicateTransactionEntry(
     string Destination,
     DateTimeOffset TransactionUtc,
     string Status,
-    DuplicateTransactionEvidence? PostMove = null);
+    DuplicateTransactionEvidence? PostMove = null,
+    DuplicateTransactionEvidence? PreMove = null);
 
 public sealed record DuplicateTransactionEvidence(
     long Size,

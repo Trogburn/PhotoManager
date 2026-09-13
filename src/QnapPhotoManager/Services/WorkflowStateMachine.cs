@@ -15,7 +15,7 @@ public sealed class WorkflowStateMachine
             [WorkflowState.DateReviewReady] = [WorkflowState.Reviewing, WorkflowState.RemediationReady, WorkflowState.Failed],
             [WorkflowState.RemediationReady] = [WorkflowState.RemediationApplied, WorkflowState.Failed],
             [WorkflowState.RemediationApplied] = [WorkflowState.Completed, WorkflowState.Failed],
-            [WorkflowState.Completed] = [WorkflowState.Configured],
+            [WorkflowState.Completed] = [WorkflowState.Configured, WorkflowState.RemediationApplied],
             [WorkflowState.Failed] = [WorkflowState.Configured]
         };
 

@@ -284,17 +284,50 @@ public sealed class DuplicateWorkflowService
     {
         RequireState(workflow, WorkflowState.RemediationApplied);
         var outputDirectory = Path.Combine(artifacts.ScanDirectory, "verification");
-        await RunScriptAsync("verify-remediation.ps1", Args(
-            ("-InputPath", artifacts.ClassifiedPath),
-            ("-DecisionPath", artifacts.DecisionPath),
-            ("-TransactionManifestPath", TransactionPath(config)),
-            ("-ScanRoot", config.ScanRoot),
-            ("-QuarantineRoot", config.QuarantineRoot),
-            ("-ConfigPath", ConfigPath()),
-            ("-OutputDirectory", outputDirectory),
-            null), cancellationToken);
+        var reportPath = Path.Combine(outputDirectory, "verification.json");
+        var result = await _runner.RunAsync(
+            Path.Combine(_scriptsRoot, "verify-remediation.ps1"),
+            Args(
+                ("-InputPath", artifacts.ClassifiedPath),
+                ("-DecisionPath", artifacts.DecisionPath),
+                ("-TransactionManifestPath", TransactionPath(config)),
+                ("-ScanRoot", config.ScanRoot),
+                ("-QuarantineRoot", config.QuarantineRoot),
+                ("-ConfigPath", ConfigPath()),
+                ("-OutputDirectory", outputDirectory),
+                null).Where(argument => argument is not null).Select(argument => argument!),
+            _repositoryRoot,
+            cancellationToken);
+        if (!File.Exists(reportPath))
+        {
+            var detail = string.Join(
+                Environment.NewLine,
+                new[] { result.StandardError, result.StandardOutput }.Where(text => !string.IsNullOrWhiteSpace(text)));
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(detail)
+                    ? "Verify quarantine did not write a report."
+                    : $"Verify quarantine did not write a report. {detail.Trim()}");
+        }
+
+        using var report = await ReadJsonAsync(reportPath, cancellationToken);
+        if (!report.RootElement.TryGetProperty("passed", out var passed) || !passed.GetBoolean())
+        {
+            var failures = report.RootElement.TryGetProperty("failures", out var list)
+                ? list.EnumerateArray()
+                    .Select(item => item.GetString())
+                    .Where(item => !string.IsNullOrWhiteSpace(item))
+                    .Select(item => item!)
+                    .ToArray()
+                : [];
+            throw new InvalidOperationException(
+                failures.Length == 0
+                    ? "Quarantine verification failed."
+                    : "Quarantine verification found " +
+                      $"{failures.Length} issue(s): {string.Join("; ", failures)}");
+        }
+
         workflow.TransitionTo(WorkflowState.Completed, "Remediation verification completed.");
-        return Path.Combine(outputDirectory, "verification.json");
+        return reportPath;
     }
 
     public async Task<IReadOnlyList<DuplicateTransactionEntry>> ReadActiveTransactionsAsync(
@@ -380,32 +413,67 @@ public sealed class DuplicateWorkflowService
                 "The selected duplicate transactions are no longer active. Refresh the undo list and try again.");
         }
 
-        var undoArguments = Args(
-            ("-DecisionPath", artifacts.DecisionPath),
-            ("-QuarantineRoot", config.QuarantineRoot),
-            ("-ScanRoot", config.ScanRoot),
-            ("-ConfigPath", ConfigPath()),
-            ("-TransactionManifestPath", TransactionPath(config)),
-            ("-Undo", null),
-            null)
-            .Concat(selectedEntries.SelectMany(entry => new[] { "-UndoSourcePath", entry.Source }));
-        var output = await RunScriptAsync("remediate.ps1", undoArguments, cancellationToken);
-
-        var remaining = await ReadActiveTransactionsAsync(config, cancellationToken);
-        var remainingKeys = remaining
-            .Select(entry => TransactionKey(entry.Source, entry.Destination))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (selectedEntries.Any(entry => remainingKeys.Contains(TransactionKey(entry.Source, entry.Destination))))
+        var listPath = Path.Combine(Path.GetTempPath(), $"qnap-duplicate-undo-{Guid.NewGuid():N}.txt");
+        try
         {
-            throw new InvalidOperationException("Selective duplicate undo completed without clearing every selected transaction.");
-        }
-        if (selectedEntries.Any(entry => !File.Exists(entry.Source) || File.Exists(entry.Destination)))
-        {
-            throw new InvalidOperationException(
-                "Selective duplicate undo did not restore every selected source and clear its quarantine path.");
-        }
+            await File.WriteAllLinesAsync(
+                listPath,
+                selectedEntries.Select(entry => entry.Source),
+                cancellationToken);
+            var undoArguments = Args(
+                ("-DecisionPath", artifacts.DecisionPath),
+                ("-QuarantineRoot", config.QuarantineRoot),
+                ("-ScanRoot", config.ScanRoot),
+                ("-ConfigPath", ConfigPath()),
+                ("-TransactionManifestPath", TransactionPath(config)),
+                ("-Undo", null),
+                ("-UndoSourcePathFile", listPath),
+                null);
+            var output = await RunScriptAsync("remediate.ps1", undoArguments, cancellationToken);
 
-        return output;
+            var remaining = await ReadActiveTransactionsAsync(config, cancellationToken);
+            var remainingKeys = remaining
+                .Select(entry => TransactionKey(entry.Source, entry.Destination))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (selectedEntries.Any(entry => remainingKeys.Contains(TransactionKey(entry.Source, entry.Destination))))
+            {
+                throw new InvalidOperationException("Selective duplicate undo completed without clearing every selected transaction.");
+            }
+            foreach (var entry in selectedEntries)
+            {
+                if (!File.Exists(entry.Source) || File.Exists(entry.Destination))
+                {
+                    throw new InvalidOperationException(
+                        "Selective duplicate undo did not restore every selected source and clear its quarantine path.");
+                }
+
+                if (entry.PreMove is null || string.IsNullOrWhiteSpace(entry.PreMove.Sha256))
+                {
+                    throw new InvalidOperationException(
+                        $"Undo verification failed; pre-move evidence is missing for {entry.Source}.");
+                }
+
+                await using var stream = File.OpenRead(entry.Source);
+                var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken))
+                    .ToLowerInvariant();
+                var info = new FileInfo(entry.Source);
+                if (info.Length != entry.PreMove.Size ||
+                    !hash.Equals(entry.PreMove.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        $"Undo verification failed; restored file does not match pre-move evidence: {entry.Source}");
+                }
+            }
+
+            return output;
+        }
+        finally
+        {
+            if (File.Exists(listPath))
+            {
+                File.Delete(listPath);
+            }
+        }
     }
 
     public void ConfirmSnapshot(WorkflowStateMachine workflow, bool confirmed)

@@ -22,6 +22,7 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
         _duplicates = duplicates ?? throw new ArgumentNullException(nameof(duplicates));
         _host = host ?? throw new ArgumentNullException(nameof(host));
         ConfigureDuplicatesCommand = new RelayCommand(ConfigureDuplicates, CanConfigureDuplicates);
+        ContinueDuplicateWorkCommand = new RelayCommand(ContinueDuplicateWork, CanContinueDuplicateWork);
         ScanDuplicatesCommand = new RelayCommand(ScanDuplicates, CanScanDuplicates);
         OpenDuplicateReviewerCommand = new RelayCommand(OpenDuplicateReviewer, CanOpenDuplicateReviewer);
         ValidateDuplicateReviewCommand = new RelayCommand(ValidateDuplicateReview, CanValidateDuplicateReview);
@@ -30,10 +31,13 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
         DuplicateApplyCommand = new RelayCommand(DuplicateApply, CanDuplicateApply);
         DuplicateVerifyCommand = new RelayCommand(DuplicateVerify, CanDuplicateVerify);
         LoadDuplicateUndoCommand = new RelayCommand(LoadDuplicateUndo);
+        SelectAllDuplicateUndoCommand = new RelayCommand(SelectAllDuplicateUndo, CanSelectAllDuplicateUndo);
         UndoSelectedDuplicatesCommand = new RelayCommand(UndoSelectedDuplicates, CanUndoSelectedDuplicates);
+        UndoAllDuplicatesCommand = new RelayCommand(UndoAllDuplicates, CanUndoAllDuplicates);
     }
 
     public RelayCommand ConfigureDuplicatesCommand { get; }
+    public RelayCommand ContinueDuplicateWorkCommand { get; }
     public RelayCommand ScanDuplicatesCommand { get; }
     public RelayCommand OpenDuplicateReviewerCommand { get; }
     public RelayCommand ValidateDuplicateReviewCommand { get; }
@@ -42,7 +46,9 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
     public RelayCommand DuplicateApplyCommand { get; }
     public RelayCommand DuplicateVerifyCommand { get; }
     public RelayCommand LoadDuplicateUndoCommand { get; }
+    public RelayCommand SelectAllDuplicateUndoCommand { get; }
     public RelayCommand UndoSelectedDuplicatesCommand { get; }
+    public RelayCommand UndoAllDuplicatesCommand { get; }
 
     public ObservableCollection<DuplicateUndoRowViewModel> DuplicateUndoItems { get; } = [];
 
@@ -82,6 +88,9 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
     public string DuplicateSnapshotName =>
         _duplicateSnapshotName ?? "Run a duplicate dry-run to generate a snapshot name.";
 
+    internal void MarkConfiguredForTests(AppConfig config) =>
+        _duplicateConfig = config ?? throw new ArgumentNullException(nameof(config));
+
     internal void Reset()
     {
         _duplicateConfig = null;
@@ -96,6 +105,7 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
     internal void RaiseCommandStates()
     {
         ConfigureDuplicatesCommand.RaiseCanExecuteChanged();
+        ContinueDuplicateWorkCommand.RaiseCanExecuteChanged();
         ScanDuplicatesCommand.RaiseCanExecuteChanged();
         OpenDuplicateReviewerCommand.RaiseCanExecuteChanged();
         ValidateDuplicateReviewCommand.RaiseCanExecuteChanged();
@@ -103,6 +113,8 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
         DuplicateApplyCommand.RaiseCanExecuteChanged();
         DuplicateVerifyCommand.RaiseCanExecuteChanged();
         UndoSelectedDuplicatesCommand.RaiseCanExecuteChanged();
+        SelectAllDuplicateUndoCommand.RaiseCanExecuteChanged();
+        UndoAllDuplicatesCommand.RaiseCanExecuteChanged();
         OnPropertyChanged(nameof(CanConfirmDuplicateSnapshot));
         NotifyDuplicateSurfaceChanged();
     }
@@ -221,7 +233,29 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
         }
     }
 
+    private void SelectAllDuplicateUndo()
+    {
+        foreach (var item in DuplicateUndoItems)
+        {
+            item.IsSelected = true;
+        }
+    }
+
     private async void UndoSelectedDuplicates()
+    {
+        await UndoDuplicatesAsync(
+            DuplicateUndoItems.Where(item => item.IsSelected).Select(item => item.Source).ToArray(),
+            "selected");
+    }
+
+    private async void UndoAllDuplicates()
+    {
+        await UndoDuplicatesAsync(
+            DuplicateUndoItems.Select(item => item.Source).ToArray(),
+            "all");
+    }
+
+    private async Task UndoDuplicatesAsync(string[] selected, string scope)
     {
         try
         {
@@ -230,27 +264,34 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
                 throw new InvalidOperationException("Configure duplicates and scan before selective undo.");
             }
 
-            var selected = DuplicateUndoItems
-                .Where(item => item.IsSelected)
-                .Select(item => item.Source)
-                .ToArray();
             if (selected.Length == 0)
             {
                 throw new InvalidOperationException("Select at least one duplicate transaction to undo.");
             }
 
-            if (!_host.Confirmation.Confirm(
-                    $"Restore {selected.Length} selected duplicate file(s) to their source paths?",
-                    "Confirm selective duplicate undo"))
+            var prompt = scope == "all"
+                ? $"Restore all {selected.Length} quarantined duplicate file(s) to their source paths?"
+                : $"Restore {selected.Length} selected duplicate file(s) to their source paths?";
+            if (!_host.Confirmation.Confirm(prompt, "Confirm selective duplicate undo"))
             {
                 _host.SetStatus("Selective duplicate undo cancelled.");
                 return;
             }
 
-            var output = await _duplicates.UndoSelectedAsync(
+            await _duplicates.UndoSelectedAsync(
                 _duplicateConfig, _duplicateArtifacts, selected);
+            if (_host.Workflow.Session.State == WorkflowState.Completed)
+            {
+                _host.Workflow.TransitionTo(
+                    WorkflowState.RemediationApplied,
+                    "Selective undo changed quarantine after verification.");
+            }
+
             await LoadDuplicateUndoAsync();
-            _host.SetStatus($"Selective duplicate undo completed for {selected.Length} file(s). {output.Trim()}");
+            _host.RefreshSession();
+            _host.RaiseCommandStates();
+            _host.SetStatus(
+                $"Restored {selected.Length} file(s). Restore verification passed. {DuplicateUndoItems.Count} still in quarantine.");
         }
         catch (Exception exception)
         {
@@ -316,9 +357,11 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
             var log = await _duplicates.ApplyAsync(
                 _host.Workflow, _duplicateConfig, _duplicateArtifacts, DuplicateSnapshotConfirmed);
             _duplicateArtifacts = _host.Workflow.Session.DuplicateArtifacts ?? _duplicateArtifacts;
-            _host.SetStatus($"Duplicate apply completed. Log: {log}");
             _host.RefreshSession();
             _host.RaiseCommandStates();
+            await LoadDuplicateUndoAsync();
+            _host.SetStatus(
+                $"Duplicate apply completed. {DuplicateUndoItems.Count} file(s) ready to undo. Log: {log}");
         }
         catch (Exception exception)
         {
@@ -337,9 +380,9 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
 
             var report = await _duplicates.VerifyAsync(
                 _host.Workflow, _duplicateConfig, _duplicateArtifacts);
-            _host.Navigate(WorkflowPage.DateWork);
-            _host.SetStatus($"Duplicate verification passed. Report: {report}");
+            _host.SetStatus($"Quarantine verification passed. {DuplicateUndoItems.Count} file(s) still quarantined.");
             _host.RefreshSession();
+            _host.RaiseCommandStates();
         }
         catch (Exception exception)
         {
@@ -347,8 +390,20 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
         }
     }
 
+    private void ContinueDuplicateWork()
+    {
+        _host.Navigate(WorkflowPage.DuplicateWork);
+        _host.SetStatus("Returned to duplicate work.");
+        _host.RaiseCommandStates();
+    }
+
     private bool CanConfigureDuplicates() =>
-        _host.Workflow.Session.State == WorkflowState.Idle;
+        _host.Workflow.Session.State == WorkflowState.Idle
+        && _host.CurrentPage == WorkflowPage.Configuration;
+
+    private bool CanContinueDuplicateWork() =>
+        _duplicateConfig is not null
+        && _host.CurrentPage == WorkflowPage.Configuration;
 
     private bool CanScanDuplicates() =>
         _host.Workflow.Session.State == WorkflowState.Configured;
@@ -380,10 +435,17 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
         && File.Exists(_duplicateArtifacts.ApplyLogPath)
         && _host.Workflow.Session.State == WorkflowState.RemediationApplied;
 
+    private bool CanSelectAllDuplicateUndo() => DuplicateUndoItems.Count > 0;
+
     private bool CanUndoSelectedDuplicates() =>
         _duplicateConfig is not null
         && _duplicateArtifacts is not null
         && DuplicateUndoItems.Any(item => item.IsSelected);
+
+    private bool CanUndoAllDuplicates() =>
+        _duplicateConfig is not null
+        && _duplicateArtifacts is not null
+        && DuplicateUndoItems.Count > 0;
 
     private void InvalidateDuplicateReview()
     {
