@@ -27,6 +27,10 @@ try {
     if ($item.decisionSummary -notlike '*Filename has a date*' -or $item.decisionSummary -notlike '*EXIF does not*') {
         throw "Decision summary did not highlight filename vs EXIF. summary=$($item.decisionSummary)"
     }
+    $filenameRow = @($item.evidenceComparison | Where-Object { $_.label -eq 'Filename' }) | Select-Object -First 1
+    if (-not $filenameRow.utc -or $filenameRow.utc -notlike '2026-01-01T*') {
+        throw "Filename evidence is missing a choosable UTC date. utc=$($filenameRow.utc)"
+    }
     $labels = @($item.evidenceComparison | ForEach-Object label)
     if ($labels -notcontains 'EXIF' -or $labels -notcontains 'Filename' -or $labels -notcontains 'Filesystem') {
         throw "Evidence comparison is missing a required source row."

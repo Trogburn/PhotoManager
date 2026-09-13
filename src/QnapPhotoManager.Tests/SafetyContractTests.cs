@@ -56,8 +56,10 @@ public sealed class SafetyContractTests
 
     [Theory]
     [InlineData("Proposed", "2026-01-01T00:00:00Z", true)]
+    [InlineData("Conflict", "2022-01-02T09:04:05Z", true)]
     [InlineData("Skipped", "2026-01-01T00:00:00Z", false)]
     [InlineData("Proposed", null, false)]
+    [InlineData("Conflict", null, false)]
     public void DateApplyCandidateRequiresProposedEvidence(string status, string? proposed, bool expected)
     {
         var item = new DateReviewItem { Status = status, ProposedCaptureTimeUtc = proposed };

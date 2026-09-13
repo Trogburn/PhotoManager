@@ -430,6 +430,41 @@ public sealed class DateRepairServiceCoverageTests : TestBase
     }
 
     [Fact]
+    public void AppliedTimestampValidationUsesManualDecisionInstant()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var photo = Path.Combine(root, "conflict.jpg");
+            File.WriteAllBytes(photo, [0xFF, 0xD8, 0xFF, 0xD9]);
+            File.SetCreationTimeUtc(photo, new DateTime(2022, 1, 2, 9, 4, 5, DateTimeKind.Utc));
+
+            var report = new DateReviewReport
+            {
+                Policy = "CreationTimeOnly",
+                Items =
+                [
+                    new DateReviewItem
+                    {
+                        Path = photo,
+                        Status = "Conflict",
+                        ProposedCaptureTimeUtc = "2022-01-02T09:04:05Z"
+                    }
+                ]
+            };
+            var decisions = new[] { new DateDecision(photo, "manual", "2022-01-02T09:04:05.0000000Z") };
+
+            DateRepairService.ValidateAppliedTimestamps(report, decisions);
+
+            File.SetCreationTimeUtc(photo, new DateTime(2022, 1, 2, 15, 4, 5, DateTimeKind.Utc));
+            var error = Assert.Throws<IOException>(() =>
+                DateRepairService.ValidateAppliedTimestamps(report, decisions));
+            Assert.Contains("creation time was not set to the proposed date", error.Message, StringComparison.Ordinal);
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
     public async Task ApplyRejectsSnapshotForDifferentReviewBeforeProcessInvocation()
     {
         var root = NewTempDirectory();

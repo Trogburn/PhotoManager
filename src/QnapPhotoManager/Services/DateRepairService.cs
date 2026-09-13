@@ -248,8 +248,9 @@ public sealed class DateRepairService(PathPolicy pathPolicy)
     }
 
     public static bool IsApplyCandidate(DateReviewItem item) =>
-        string.Equals(item.Status, "Proposed", StringComparison.OrdinalIgnoreCase)
-        && !string.IsNullOrWhiteSpace(item.ProposedCaptureTimeUtc);
+        !string.IsNullOrWhiteSpace(item.ProposedCaptureTimeUtc)
+        && (string.Equals(item.Status, "Proposed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(item.Status, "Conflict", StringComparison.OrdinalIgnoreCase));
 
     public string GetUndoManifestPath(string artifactRoot) =>
         ResolveArtifact(artifactRoot, "dates", "date-undo.jsonl");
@@ -307,6 +308,11 @@ public sealed class DateRepairService(PathPolicy pathPolicy)
         var requireLastWrite = string.Equals(
             report.Policy, "CreationAndLastWriteTime", StringComparison.OrdinalIgnoreCase);
 
+        var expectedByPath = decisions
+            .Where(decision =>
+                approved.Contains(Path.GetFullPath(decision.Path)))
+            .ToDictionary(decision => Path.GetFullPath(decision.Path), StringComparer.OrdinalIgnoreCase);
+
         foreach (var item in report.Items)
         {
             if (!approved.Contains(Path.GetFullPath(item.Path)))
@@ -314,7 +320,12 @@ public sealed class DateRepairService(PathPolicy pathPolicy)
                 continue;
             }
 
-            if (string.IsNullOrWhiteSpace(item.ProposedCaptureTimeUtc))
+            var expectedText = expectedByPath.TryGetValue(Path.GetFullPath(item.Path), out var decision)
+                && string.Equals(decision.Action, "manual", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(decision.Date)
+                    ? decision.Date
+                    : item.ProposedCaptureTimeUtc;
+            if (string.IsNullOrWhiteSpace(expectedText))
             {
                 throw new IOException($"Apply verification failed; no proposed date: {item.Path}");
             }
@@ -325,7 +336,7 @@ public sealed class DateRepairService(PathPolicy pathPolicy)
                 throw new IOException($"Apply verification failed; file is missing: {item.Path}");
             }
 
-            var proposed = ParseUtc(item.ProposedCaptureTimeUtc);
+            var proposed = ParseUtc(expectedText);
             if (!NearlyEqual(file.CreationTimeUtc, proposed))
             {
                 throw new IOException(

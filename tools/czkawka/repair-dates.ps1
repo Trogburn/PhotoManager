@@ -378,7 +378,8 @@ function New-EvidenceComparisonRow {
         [string]$Label,
         [string]$State,
         [string]$Detail,
-        [bool]$Selected
+        [bool]$Selected,
+        [string]$Utc
     )
 
     [ordered]@{
@@ -386,7 +387,18 @@ function New-EvidenceComparisonRow {
         state = $State
         detail = $Detail
         selected = $Selected
+        utc = if ([string]::IsNullOrWhiteSpace($Utc)) { $null } else { $Utc }
     }
+}
+
+function Get-EvidenceUtc {
+    param($Evidence)
+
+    if ($null -eq $Evidence -or $null -eq $Evidence.Date) {
+        return $null
+    }
+
+    return $Evidence.Date.UtcDateTime.ToString('o')
 }
 
 function Get-EvidenceComparisonRows {
@@ -404,7 +416,7 @@ function Get-EvidenceComparisonRows {
     $folder = $Evidence | Where-Object { $_.Source -eq 'folder' } | Select-Object -First 1
 
     if ($null -ne $exifDated) {
-        [void]$rows.Add((New-EvidenceComparisonRow -Label 'EXIF' -State 'Has date' -Detail (Convert-EvidenceDateText $exifDated) -Selected ($SelectedSource -like 'exif*')))
+        [void]$rows.Add((New-EvidenceComparisonRow -Label 'EXIF' -State 'Has date' -Detail (Convert-EvidenceDateText $exifDated) -Selected ($SelectedSource -like 'exif*') -Utc (Get-EvidenceUtc $exifDated)))
     }
     elseif (@($exifItems | Where-Object { $_.Source -eq 'exif' -and -not [string]::IsNullOrWhiteSpace([string]$_.Error) }).Count -gt 0) {
         $err = $exifItems | Where-Object { $_.Source -eq 'exif' } | Select-Object -First 1
@@ -415,7 +427,7 @@ function Get-EvidenceComparisonRows {
     }
 
     if ($null -ne $filename -and $null -ne $filename.Date) {
-        [void]$rows.Add((New-EvidenceComparisonRow -Label 'Filename' -State 'Has date' -Detail (Convert-EvidenceDateText $filename) -Selected ($SelectedSource -eq 'filename')))
+        [void]$rows.Add((New-EvidenceComparisonRow -Label 'Filename' -State 'Has date' -Detail (Convert-EvidenceDateText $filename) -Selected ($SelectedSource -eq 'filename') -Utc (Get-EvidenceUtc $filename)))
     }
     elseif ($null -ne $filename -and -not [string]::IsNullOrWhiteSpace([string]$filename.Error)) {
         [void]$rows.Add((New-EvidenceComparisonRow -Label 'Filename' -State 'Invalid' -Detail ([string]$filename.Error) -Selected $false))
@@ -426,7 +438,7 @@ function Get-EvidenceComparisonRows {
 
     if ($null -ne $folder) {
         if ($null -ne $folder.Date) {
-            [void]$rows.Add((New-EvidenceComparisonRow -Label 'Folder' -State 'Has date' -Detail (Convert-EvidenceDateText $folder) -Selected ($SelectedSource -eq 'folder')))
+            [void]$rows.Add((New-EvidenceComparisonRow -Label 'Folder' -State 'Has date' -Detail (Convert-EvidenceDateText $folder) -Selected ($SelectedSource -eq 'folder') -Utc (Get-EvidenceUtc $folder)))
         }
         else {
             [void]$rows.Add((New-EvidenceComparisonRow -Label 'Folder' -State 'Invalid' -Detail ([string]$folder.Error) -Selected $false))
@@ -708,12 +720,59 @@ else {
     }
 }
 
+function Read-DecisionEntries {
+    param([string]$Path)
+
+    $json = Get-Content -LiteralPath $Path -Raw
+    # Windows PowerShell ConvertFrom-Json turns ISO-8601 strings into DateTime.
+    # Stringifying those DateTime values drops Z and re-applies local offset, so a
+    # reviewer-chosen UTC instant such as 09:04Z becomes 15:04Z in UTC-6.
+    $protected = [regex]::Replace($json, '(?<=\"date\"\s*:\s*\")([^\"]+)', {
+        param($match)
+        'ISO|' + $match.Groups[1].Value
+    })
+    foreach ($decision in @($protected | ConvertFrom-Json)) {
+        if ($null -ne $decision.PSObject.Properties['date'] -and [string]$decision.date -like 'ISO|*') {
+            $decision.date = ([string]$decision.date).Substring(4)
+        }
+        $decision
+    }
+}
+
+function Convert-ToUtcFileTime {
+    param($Value)
+
+    if ($Value -is [datetimeoffset]) {
+        return ([datetimeoffset]$Value).UtcDateTime
+    }
+
+    if ($Value -is [datetime]) {
+        $dateTime = [datetime]$Value
+        if ($dateTime.Kind -eq [DateTimeKind]::Utc) {
+            return $dateTime
+        }
+
+        return $dateTime.ToUniversalTime()
+    }
+
+    $parsed = [datetimeoffset]::MinValue
+    if (-not [datetimeoffset]::TryParse(
+            [string]$Value,
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::RoundtripKind,
+            [ref]$parsed)) {
+        throw "Invalid proposed capture timestamp: $Value"
+    }
+
+    return $parsed.UtcDateTime
+}
+
 $decisions = @{}
 if ($DecisionPath) {
     if (-not (Test-Path -LiteralPath $DecisionPath)) {
         throw "Decision file not found: $DecisionPath"
     }
-    foreach ($decision in @(Get-Content -LiteralPath $DecisionPath -Raw | ConvertFrom-Json)) {
+    foreach ($decision in @(Read-DecisionEntries -Path $DecisionPath)) {
         $decisions[[System.IO.Path]::GetFullPath([string]$decision.path)] = $decision
     }
 }
@@ -780,9 +839,10 @@ if ($Apply) {
         $beforeCreationTimeUtc = $current.CreationTimeUtc.ToString('o')
         $beforeLastWriteTimeUtc = $current.LastWriteTimeUtc.ToString('o')
         $preEvidence = Get-DateRepairEvidence -File $current
-        $current.CreationTimeUtc = [datetime]$review.proposedCaptureTimeUtc
+        $proposedUtc = Convert-ToUtcFileTime -Value $review.proposedCaptureTimeUtc
+        $current.CreationTimeUtc = $proposedUtc
         if ($Policy -eq 'CreationAndLastWriteTime') {
-            $current.LastWriteTimeUtc = [datetime]$review.proposedCaptureTimeUtc
+            $current.LastWriteTimeUtc = $proposedUtc
         }
         $manifestEntry = [ordered]@{
             path = $review.path

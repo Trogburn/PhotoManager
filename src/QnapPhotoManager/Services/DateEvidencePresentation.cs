@@ -7,7 +7,10 @@ public sealed record DateEvidenceRow(
     string State,
     string Detail,
     bool IsSelected,
-    bool IsMissing);
+    bool IsMissing,
+    string? Utc = null);
+
+public sealed record DateSourceChoice(string Label, string DateValue);
 
 public static class DateEvidencePresentation
 {
@@ -22,7 +25,8 @@ public static class DateEvidencePresentation
                     row.State,
                     row.Detail,
                     row.Selected,
-                    IsMissingState(row.State)))
+                    IsMissingState(row.State),
+                    FirstNonEmpty(row.Utc, row.Selected ? item.ProposedCaptureTimeUtc : null)))
                 .ToArray();
         }
 
@@ -34,15 +38,21 @@ public static class DateEvidencePresentation
         var rows = new List<DateEvidenceRow>
         {
             exifSelected
-                ? new DateEvidenceRow("EXIF", "Has date", item.RawValue ?? string.Empty, true, false)
+                ? new DateEvidenceRow("EXIF", "Has date", item.RawValue ?? string.Empty, true, false, item.ProposedCaptureTimeUtc)
                 : new DateEvidenceRow("EXIF", "Missing", "No capture date", false, true),
             filenameSelected || !string.IsNullOrWhiteSpace(filenameValue)
-                ? new DateEvidenceRow("Filename", "Has date", filenameValue ?? item.RawValue ?? string.Empty, filenameSelected, false)
+                ? new DateEvidenceRow(
+                    "Filename",
+                    "Has date",
+                    filenameValue ?? item.RawValue ?? string.Empty,
+                    filenameSelected,
+                    false,
+                    filenameSelected ? item.ProposedCaptureTimeUtc : filenameValue)
                 : new DateEvidenceRow("Filename", "Missing", "No date in file name", false, true)
         };
         if (folderSelected)
         {
-            rows.Add(new DateEvidenceRow("Folder", "Has date", item.RawValue ?? string.Empty, true, false));
+            rows.Add(new DateEvidenceRow("Folder", "Has date", item.RawValue ?? string.Empty, true, false, item.ProposedCaptureTimeUtc));
         }
 
         rows.Add(new DateEvidenceRow(
@@ -115,6 +125,11 @@ public static class DateEvidencePresentation
         var filename = rows.FirstOrDefault(row => row.Label.Equals("Filename", StringComparison.OrdinalIgnoreCase));
         var source = item.Source ?? string.Empty;
 
+        if (item.Status.Equals("Conflict", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Dates conflict";
+        }
+
         if (source.StartsWith("exif", StringComparison.OrdinalIgnoreCase))
         {
             if (filename?.State.Equals("Has date", StringComparison.OrdinalIgnoreCase) == true)
@@ -163,6 +178,61 @@ public static class DateEvidencePresentation
         return string.IsNullOrWhiteSpace(source) ? "No capture source" : source;
     }
 
+    public static string StatusLabel(DateReviewItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (item.Status.Equals("AlreadyApplied", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Already applied";
+        }
+
+        if (item.Status.Equals("FutureDate", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Future date";
+        }
+
+        if (item.Status.Equals("NoEvidence", StringComparison.OrdinalIgnoreCase))
+        {
+            return "No dates";
+        }
+
+        if (item.Status.Equals("Conflict", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Dates conflict";
+        }
+
+        if (item.Status.Equals("InvalidEvidence", StringComparison.OrdinalIgnoreCase))
+        {
+            if (Contains(item.Reason, "Impossible"))
+            {
+                return "Impossible date";
+            }
+
+            if (Contains(item.Reason, "month/day"))
+            {
+                return "Ambiguous date";
+            }
+
+            return "Invalid date";
+        }
+
+        return string.IsNullOrWhiteSpace(item.Status) ? "Unknown" : item.Status;
+    }
+
+    public static IReadOnlyList<DateSourceChoice> ChoosableSources(DateReviewItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        return BuildRows(item)
+            .Where(row =>
+                row.State.Equals("Has date", StringComparison.OrdinalIgnoreCase) &&
+                !row.Label.Equals("Filesystem", StringComparison.OrdinalIgnoreCase))
+            .Select(row => new DateSourceChoice(
+                row.Label,
+                FirstNonEmpty(row.Utc, row.IsSelected ? item.ProposedCaptureTimeUtc : null, ParseableDate(row.Detail)) ?? string.Empty))
+            .Where(choice => !string.IsNullOrWhiteSpace(choice.DateValue))
+            .ToArray();
+    }
+
     public static string CompactUtc(string? value)
     {
         if (DateTimeOffset.TryParse(value, out var parsed))
@@ -198,4 +268,20 @@ public static class DateEvidencePresentation
 
     private static string? FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
+
+    private static bool Contains(string? value, string token) =>
+        !string.IsNullOrWhiteSpace(value) &&
+        value.Contains(token, StringComparison.OrdinalIgnoreCase);
+
+    private static string? ParseableDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        return value.Contains(':') || System.Text.RegularExpressions.Regex.IsMatch(value, @"^\d{4}-\d{2}-\d{2}")
+            ? value
+            : null;
+    }
 }

@@ -67,6 +67,33 @@ try {
         throw 'Sidecar metadata was unexpectedly treated as capture-date evidence.'
     }
 
+    $manualUtcFile = Join-Path $root 'manual-utc-choice.txt'
+    'manual utc' | Set-Content -Path $manualUtcFile -Encoding UTF8
+    $manualUtcReview = Join-Path $root 'manual-utc-review.json'
+    $manualUtcDecision = Join-Path $root 'manual-utc-decision.json'
+    $manualUtcManifest = Join-Path $root 'manual-utc-undo.jsonl'
+    $manualUtcApply = Join-Path $root 'manual-utc-apply.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $manualUtcFile -OutputPath $manualUtcReview | Out-Null
+    @(
+        [ordered]@{
+            path = [System.IO.Path]::GetFullPath($manualUtcFile)
+            action = 'manual'
+            date = '2022-01-02T09:04:05.0000000Z'
+        }
+    ) | ConvertTo-Json | Set-Content -Path $manualUtcDecision -Encoding UTF8
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -ReviewPath $manualUtcReview -DecisionPath $manualUtcDecision -OutputPath $manualUtcApply -Apply -UndoManifestPath $manualUtcManifest | Out-Null
+    $manualUtcApplied = Get-Item -LiteralPath $manualUtcFile
+    $expectedManualUtc = [datetime]::SpecifyKind([datetime]'2022-01-02T09:04:05', [DateTimeKind]::Utc)
+    if ($manualUtcApplied.CreationTimeUtc -ne $expectedManualUtc) {
+        throw "Manual UTC decision was shifted. creationUtc=$($manualUtcApplied.CreationTimeUtc.ToString('o'))"
+    }
+    $manualUtcReport = Get-Content -LiteralPath $manualUtcApply -Raw | ConvertFrom-Json
+    $manualUtcItem = @($manualUtcReport.items)[0]
+    $manualProposed = [datetimeoffset]$manualUtcItem.proposedCaptureTimeUtc
+    if ($manualProposed.UtcDateTime -ne $expectedManualUtc) {
+        throw "Manual UTC proposal was rewritten with a local offset. proposed=$($manualUtcItem.proposedCaptureTimeUtc)"
+    }
+
     $exifPath = Join-Path $root '2023-02-03_exif-tag.jpg'
     $exifReportPath = Join-Path $root 'exif-review.json'
     & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $exifPath -OutputPath $exifReportPath | Out-Null
@@ -273,9 +300,15 @@ try {
         throw 'High-confidence batch approval did not update CreationTime.'
     }
     $appliedItem = @((Get-Content -Path $batchApply -Raw | ConvertFrom-Json).items)[0]
+    $appliedProposedUtc = if ($appliedItem.proposedCaptureTimeUtc -is [datetime]) {
+        ([datetime]$appliedItem.proposedCaptureTimeUtc).ToUniversalTime()
+    }
+    else {
+        [datetimeoffset]::Parse([string]$appliedItem.proposedCaptureTimeUtc, [Globalization.CultureInfo]::InvariantCulture).UtcDateTime
+    }
     if (-not (Test-Path -LiteralPath $batchApply) -or
-        [math]::Abs(($batchAfter - [datetime]$appliedItem.proposedCaptureTimeUtc).TotalSeconds) -gt 1) {
-        throw "Apply did not leave CreationTime at the proposed date. actual=$($batchAfter.ToString('o')) proposed=$($appliedItem.proposedCaptureTimeUtc)"
+        [math]::Abs(($batchAfter.ToUniversalTime() - $appliedProposedUtc).TotalSeconds) -gt 1) {
+        throw "Apply did not leave CreationTime at the proposed date. actual=$($batchAfter.ToString('o')) proposed=$($appliedProposedUtc.ToString('o'))"
     }
     $batchRescan = Join-Path $root 'batch-rescan.json'
     & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $batchPath -OutputPath $batchRescan | Out-Null

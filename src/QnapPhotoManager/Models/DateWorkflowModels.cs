@@ -90,6 +90,9 @@ public sealed class DateEvidenceComparison
 
     [JsonPropertyName("selected")]
     public bool Selected { get; init; }
+
+    [JsonPropertyName("utc")]
+    public string? Utc { get; init; }
 }
 
 public sealed record DateSnapshot(
