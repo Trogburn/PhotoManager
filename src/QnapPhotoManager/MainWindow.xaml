@@ -4,15 +4,47 @@
         x:Name="MainWindowRoot"
         AutomationProperties.AutomationId="MainWindow"
         Title="Qnap Photo Manager"
-        Width="1040"
-        Height="920"
-        MinWidth="800"
-        MinHeight="800">
+        Width="1600"
+        Height="1040"
+        MinWidth="1280"
+        MinHeight="900">
     <Window.Resources>
         <Style TargetType="Button">
             <Setter Property="MinHeight" Value="30" />
             <Setter Property="Padding" Value="9,3" />
             <Setter Property="VerticalContentAlignment" Value="Center" />
+        </Style>
+        <Style x:Key="DateDecisionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="MinWidth" Value="88" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Margin" Value="0,0,0,0" />
+        </Style>
+        <Style x:Key="EvidenceStateText" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                    <Setter Property="Foreground" Value="#0F6A43" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                    <Setter Property="Foreground" Value="#6B7280" />
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="ConfidenceBadge" TargetType="Border">
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="Background" Value="#EEF2F7" />
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding Confidence}" Value="High">
+                    <Setter Property="Background" Value="#D1FAE5" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Confidence}" Value="Medium">
+                    <Setter Property="Background" Value="#FEF3C7" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding Confidence}" Value="Low">
+                    <Setter Property="Background" Value="#E5E7EB" />
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
     <Grid Margin="24">
@@ -143,7 +175,14 @@
                         <DataGrid ItemsSource="{Binding DuplicateUndoItems}" AutoGenerateColumns="False" CanUserAddRows="False"
                                   HeadersVisibility="Column" MaxHeight="180">
                             <DataGrid.Columns>
-                                <DataGridCheckBoxColumn Header="Select" Binding="{Binding IsSelected, Mode=TwoWay}" />
+                                <DataGridTemplateColumn Header="Select" Width="Auto">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <CheckBox HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                                 <DataGridTextColumn Header="Moved" Binding="{Binding MovedAt}" IsReadOnly="True" />
                                 <DataGridTextColumn Header="Source" Binding="{Binding Source}" IsReadOnly="True" />
                                 <DataGridTextColumn Header="Quarantine" Binding="{Binding Destination}" IsReadOnly="True" />
@@ -162,6 +201,7 @@
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
+                <StackPanel>
                 <WrapPanel>
                     <Button AutomationProperties.AutomationId="ScanDatesButton"
                             Command="{Binding ScanDatesCommand}" Content="Scan" />
@@ -173,65 +213,208 @@
                               IsChecked="{Binding DateSnapshotConfirmed}" Content="Confirm QNAP snapshot for dates" />
                     <Button AutomationProperties.AutomationId="ApplyDatesButton"
                             Margin="14,0,0,0" Command="{Binding ApplyDatesCommand}" Content="Apply dates" />
-                    <Button AutomationProperties.AutomationId="LoadUndoButton"
-                            Margin="8,0,0,0" Command="{Binding LoadUndoCommand}" Content="Undo history" />
-                    <Button AutomationProperties.AutomationId="UndoSelectedButton"
-                            Margin="8,0,0,0" Command="{Binding UndoSelectedCommand}" Content="Undo" />
+                    <Button AutomationProperties.AutomationId="OpenDateUndoButton"
+                            Margin="8,0,0,0" Command="{Binding OpenDateUndoCommand}" Content="Undo applied dates" />
                 </WrapPanel>
+                <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding DateBulkApproveGroups}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Margin="0,0,8,8" Command="{Binding ApproveCommand}" Content="{Binding Label}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                </StackPanel>
                 <Grid Grid.Row="1" Margin="0,8,0,8">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="1.35*" />
+                        <ColumnDefinition Width="0.9*" />
                     </Grid.ColumnDefinitions>
-                    <DataGrid ItemsSource="{Binding DateItems}" AutoGenerateColumns="False"
-                              IsReadOnly="False" CanUserAddRows="False" HeadersVisibility="Column"
-                              SelectedItem="{Binding SelectedDateItem, Mode=TwoWay}">
-                        <DataGrid.Columns>
-                            <DataGridComboBoxColumn Header="Decision"
-                                ItemsSource="{Binding DataContext.DateDecisionOptions, RelativeSource={RelativeSource AncestorType=DataGrid}}"
-                                SelectedItemBinding="{Binding Decision, Mode=TwoWay}" />
-                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Confidence" Binding="{Binding Confidence}" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Proposed UTC" Binding="{Binding ProposedCaptureTimeUtc}" IsReadOnly="True" />
-                            <DataGridTextColumn Header="Proposed local" Binding="{Binding ProposedLocalTime}" IsReadOnly="True" />
-                            <DataGridTextColumn Header="File" Binding="{Binding FileName}" IsReadOnly="True" />
-                        </DataGrid.Columns>
-                    </DataGrid>
-                    <ScrollViewer Grid.Column="1" Margin="16,0,0,0" VerticalScrollBarVisibility="Auto">
-                        <StackPanel>
-                            <TextBlock FontWeight="SemiBold" Text="Selected item evidence" />
+                    <ListBox AutomationProperties.AutomationId="DateReviewList"
+                             ItemsSource="{Binding DateItems}"
+                             SelectedItem="{Binding SelectedDateItem, Mode=TwoWay}"
+                             HorizontalContentAlignment="Stretch"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0,0,0,6" />
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="12,8" BorderBrush="#DDDDE3" BorderThickness="1" CornerRadius="4">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="White" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsApproved}" Value="True">
+                                                    <Setter Property="Background" Value="#F0F7F3" />
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsSkipped}" Value="True">
+                                                    <Setter Property="Background" Value="#F7F7F8" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                        <DockPanel>
+                                            <Border DockPanel.Dock="Right" Margin="8,0,0,0" Style="{StaticResource ConfidenceBadge}">
+                                                <TextBlock FontWeight="SemiBold" Text="{Binding Confidence}" />
+                                            </Border>
+                                            <TextBlock FontSize="15" FontWeight="SemiBold" Text="{Binding FileName}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DockPanel>
+                                            <TextBlock Margin="0,2,0,0" Foreground="#6B7280" FontSize="12"
+                                                       Text="{Binding Path}" TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding Path}" />
+                                            <TextBlock Margin="0,6,0,0" FontSize="14" FontWeight="SemiBold"
+                                                       Foreground="#0F6A43" Text="{Binding DecisionHeadline}"
+                                                       TextWrapping="Wrap" />
+                                            <TextBlock Margin="0,4,0,0" Foreground="#374151"
+                                                       Text="{Binding DecisionStatusLine}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Margin="16,0,0,0" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsProposed}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <Button Command="{Binding ApproveCommand}" Content="Approve">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource DateDecisionButton}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsApproved}" Value="True">
+                                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                            <Button Margin="8,0,0,0" Command="{Binding SkipCommand}" Content="Skip">
+                                                <Button.Style>
+                                                    <Style TargetType="Button" BasedOn="{StaticResource DateDecisionButton}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSkipped}" Value="True">
+                                                                <Setter Property="FontWeight" Value="SemiBold" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <DockPanel Grid.Column="1" Margin="16,0,0,0">
+                        <TextBlock DockPanel.Dock="Top" FontWeight="SemiBold" Text="Why this proposal" />
+                        <TextBlock DockPanel.Dock="Top" Margin="0,4,0,0" Foreground="#6B7280"
+                                   Text="{Binding SelectedDateItem.Path}" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding SelectedDateItem.Path}"
+                                   AutomationProperties.AutomationId="SelectedDatePathText" />
+                        <ItemsControl DockPanel.Dock="Top" Margin="0,12,0,0"
+                                      ItemsSource="{Binding SelectedDateItem.EvidenceRows}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="92" />
+                                            <ColumnDefinition Width="110" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock FontWeight="SemiBold" Text="{Binding Label}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding State}"
+                                                   Style="{StaticResource EvidenceStateText}" />
+                                        <TextBlock Grid.Column="2" Text="{Binding Detail}" TextTrimming="CharacterEllipsis"
+                                                   ToolTip="{Binding Detail}">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="FontWeight" Value="SemiBold" />
+                                                            <Setter Property="Foreground" Value="#0F6A43" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                                                            <Setter Property="Foreground" Value="#6B7280" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <StackPanel DockPanel.Dock="Top" Margin="0,8,0,0" Orientation="Horizontal">
                             <Image AutomationProperties.AutomationId="DatePreviewImage"
-                                   Source="{Binding DatePreview}" MaxHeight="180" Stretch="Uniform" Margin="0,8,0,8" />
-                            <TextBlock AutomationProperties.AutomationId="SelectedDatePathText"
-                                       Text="{Binding SelectedDateItem.Path}" TextWrapping="Wrap" />
-                            <TextBlock AutomationProperties.AutomationId="DateEvidenceSummaryText"
-                                       Margin="0,8,0,0" Text="{Binding DateEvidenceSummary}" TextWrapping="Wrap" />
-                            <TextBlock Margin="0,8,0,0" Text="{Binding SelectedDateItem.Reason}" TextWrapping="Wrap" />
-                            <TextBlock Text="{Binding SelectedDateItem.SizeDescription, StringFormat=Size: {0}}" />
-                            <TextBlock Text="{Binding SelectedDateItem.RawValue, StringFormat=Raw value: {0}}" />
-                            <TextBlock Text="{Binding SelectedDateItem.ParsedFilenameToken, StringFormat=Parsed filename token: {0}}" />
-                            <TextBlock Text="{Binding SelectedDateItem.TimezoneDescription, StringFormat=Timezone interpretation: {0}}" />
-                            <TextBlock Text="{Binding SelectedDateItem.CurrentCreationTimeUtc, StringFormat=Current creation UTC: {0}}" />
-                            <TextBlock Text="{Binding SelectedDateItem.CurrentLastWriteTimeUtc, StringFormat=Current last write UTC: {0}}" />
-                            <TextBlock Text="{Binding SelectedDateItem.Policy, StringFormat=Apply policy: {0}}" />
-                            <GroupBox Header="Date undo history" Margin="0,16,0,0">
-                                <DataGrid ItemsSource="{Binding UndoItems}" AutoGenerateColumns="False" CanUserAddRows="False" MaxHeight="160">
-                                    <DataGrid.Columns>
-                                        <DataGridCheckBoxColumn Header="Select" Binding="{Binding IsSelected, Mode=TwoWay}" />
-                                        <DataGridTextColumn Header="Applied" Binding="{Binding AppliedAt}" IsReadOnly="True" />
-                                        <DataGridTextColumn Header="Path" Binding="{Binding Path}" IsReadOnly="True" />
-                                    </DataGrid.Columns>
-                                </DataGrid>
-                            </GroupBox>
+                                   Source="{Binding DatePreview}" MaxHeight="120" MaxWidth="160"
+                                   Stretch="Uniform" />
+                            <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SelectedDateItem.ProposedLocalTime, StringFormat=Proposed local: {0}}" />
+                                <TextBlock Text="{Binding SelectedDateItem.ProposedCaptureTimeUtc, StringFormat=Proposed {0}}" />
+                                <TextBlock Foreground="#6B7280" Text="{Binding DatePreviewMessage}" />
+                            </StackPanel>
                         </StackPanel>
-                    </ScrollViewer>
+                        <TextBlock />
+                    </DockPanel>
                 </Grid>
                 <StackPanel Grid.Row="2">
-                    <TextBlock Text="{Binding DateSummary}" />
-                    <TextBlock Foreground="Gray" Text="{Binding DateTimezonePolicy}" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding DateSummary}" ToolTip="{Binding DateTimezonePolicy}" />
                     <TextBlock Foreground="Gray" Text="{Binding DateSnapshotName}" TextTrimming="CharacterEllipsis" />
                     <TextBlock Foreground="Gray" Text="{Binding DateReportPath}" TextTrimming="CharacterEllipsis" />
                 </StackPanel>
+            </Grid>
+        </GroupBox>
+
+        <GroupBox Grid.Row="2" AutomationProperties.AutomationId="DateUndoPage"
+                  Header="Date undo" Visibility="{Binding DateUndoPageVisibility}" Margin="0,0,0,12">
+            <Grid Margin="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <WrapPanel>
+                    <Button AutomationProperties.AutomationId="SelectAllDateUndoButton"
+                            Command="{Binding SelectAllDateUndoCommand}" Content="Select all" />
+                    <Button AutomationProperties.AutomationId="UndoSelectedButton"
+                            Margin="8,0,0,0" Command="{Binding UndoSelectedCommand}" Content="Undo" />
+                </WrapPanel>
+                <DataGrid Grid.Row="1" Margin="0,12,0,0"
+                          AutomationProperties.AutomationId="DateUndoGrid"
+                          ItemsSource="{Binding UndoItems}" AutoGenerateColumns="False" CanUserAddRows="False"
+                          HeadersVisibility="Column">
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="Select" Width="Auto">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTextColumn Header="Applied" Binding="{Binding AppliedAt}" Width="160" IsReadOnly="True" />
+                        <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="220" IsReadOnly="True" />
+                        <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*" IsReadOnly="True" />
+                    </DataGrid.Columns>
+                </DataGrid>
             </Grid>
         </GroupBox>
 

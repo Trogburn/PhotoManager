@@ -79,7 +79,10 @@ public sealed class MainWindowUiTests
             Assert.Null(window.FindFirstDescendant(condition => condition.ByAutomationId("DuplicateWorkPage")));
             Assert.False(Find(window, "ApplyDatesButton").IsEnabled);
             Assert.False(Find(window, "CreateDateSnapshotButton").IsEnabled);
-            Assert.False(Find(window, "UndoSelectedButton").IsEnabled);
+            Assert.True(Find(window, "ScanDatesButton").IsEnabled);
+            Assert.False(Find(window, "OpenDateUndoButton").IsEnabled);
+            Assert.Null(window.FindFirstDescendant(condition =>
+                condition.ByAutomationId("DateUndoPage")));
         }
         finally
         {

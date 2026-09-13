@@ -12,7 +12,8 @@ public enum WorkflowPage
 {
     Configuration,
     DuplicateWork,
-    DateWork
+    DateWork,
+    DateUndo
 }
 
 public sealed class MainViewModel : ObservableObject
@@ -41,7 +42,10 @@ public sealed class MainViewModel : ObservableObject
     private DateReviewRowViewModel? _selectedDateItem;
     private ImageSource? _datePreview;
     private string _dateEvidenceSummary = "Select a date proposal to inspect its evidence.";
+    private string _datePreviewMessage = string.Empty;
     private bool _dateApplyCompleted;
+    private readonly Dictionary<string, string> _retainedDateDecisions = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _pathsReopenedByUndo = new(StringComparer.OrdinalIgnoreCase);
 
     public MainViewModel(
         WorkflowStateMachine workflow,
@@ -57,11 +61,12 @@ public sealed class MainViewModel : ObservableObject
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
         StartCommand = new RelayCommand(Start);
         ResetCommand = new RelayCommand(Reset);
-        ScanDatesCommand = new RelayCommand(ScanDates);
+        ScanDatesCommand = new RelayCommand(ScanDates, CanScanDates);
         CreateDateSnapshotCommand = new RelayCommand(CreateDateSnapshot, CanCreateDateSnapshot);
         ApplyDatesCommand = new RelayCommand(ApplyDates, CanApplyDates);
-        LoadUndoCommand = new RelayCommand(LoadUndo);
         UndoSelectedCommand = new RelayCommand(UndoSelected, CanUndoSelected);
+        OpenDateUndoCommand = new RelayCommand(OpenDateUndo, CanOpenDateUndo);
+        SelectAllDateUndoCommand = new RelayCommand(SelectAllDateUndo, CanSelectAllDateUndo);
         SampleDateReviewCommand = new RelayCommand(SampleDateReview);
         ConfigureDuplicatesCommand = new RelayCommand(ConfigureDuplicates, CanConfigureDuplicates);
         StartDateWorkCommand = new RelayCommand(StartDateWork, CanConfigureDuplicates);
@@ -107,6 +112,9 @@ public sealed class MainViewModel : ObservableObject
     public Visibility DateWorkPageVisibility =>
         _currentPage == WorkflowPage.DateWork ? Visibility.Visible : Visibility.Collapsed;
 
+    public Visibility DateUndoPageVisibility =>
+        _currentPage == WorkflowPage.DateUndo ? Visibility.Visible : Visibility.Collapsed;
+
     public string StatusMessage
     {
         get => _statusMessage;
@@ -118,8 +126,9 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand ScanDatesCommand { get; }
     public RelayCommand CreateDateSnapshotCommand { get; }
     public RelayCommand ApplyDatesCommand { get; }
-    public RelayCommand LoadUndoCommand { get; }
     public RelayCommand UndoSelectedCommand { get; }
+    public RelayCommand OpenDateUndoCommand { get; }
+    public RelayCommand SelectAllDateUndoCommand { get; }
     public RelayCommand SampleDateReviewCommand { get; }
     public RelayCommand ConfigureDuplicatesCommand { get; }
     public RelayCommand StartDateWorkCommand { get; }
@@ -136,7 +145,7 @@ public sealed class MainViewModel : ObservableObject
     public ObservableCollection<DateReviewRowViewModel> DateItems { get; } = [];
     public ObservableCollection<DateUndoRowViewModel> UndoItems { get; } = [];
     public ObservableCollection<DuplicateUndoRowViewModel> DuplicateUndoItems { get; } = [];
-    public IReadOnlyList<string> DateDecisionOptions { get; } = ["Undecided", "Approve", "Skip"];
+    public ObservableCollection<DateBulkApproveGroup> DateBulkApproveGroups { get; } = [];
 
     public int SampleCount
     {
@@ -162,6 +171,8 @@ public sealed class MainViewModel : ObservableObject
     public ImageSource? DatePreview => _datePreview;
 
     public string DateEvidenceSummary => _dateEvidenceSummary;
+
+    public string DatePreviewMessage => _datePreviewMessage;
 
     public bool DuplicateSnapshotConfirmed
     {
@@ -205,8 +216,11 @@ public sealed class MainViewModel : ObservableObject
     public string DateSummary =>
         _dateReport is null
             ? "Run a read-only evidence scan to begin."
-            : $"{DateItems.Count(item => item.Status == "Proposed")} proposed; " +
-              $"{DateItems.Count(item => item.Status != "Proposed")} require review or have no evidence.";
+            : $"{DateItems.Count(item => item.IsProposed)} proposed; " +
+              $"{DateItems.Count(item => item.IsProposed && !item.HasDecision)} undecided; " +
+              $"{DateItems.Count(item => item.IsProposed && item.IsApproved)} approved; " +
+              $"{DateItems.Count(item => item.IsProposed && item.IsSkipped)} skipped; " +
+              $"{DateItems.Count(item => item.IsAlreadyApplied)} already applied.";
 
     public string QuarantineRoot { get; set; } = @"\\TrogQNAP6HDD\PhotoWorkflowTest\WpfAcceptance\Quarantine";
     public string DuplicateArtifactSummary => _duplicateArtifacts is null
@@ -295,6 +309,7 @@ public sealed class MainViewModel : ObservableObject
             StatusMessage = "Date workflow configured. Scan is read-only.";
             RefreshSessionProperties();
             RaiseDateCommandStates();
+            LoadUndo();
         }
         catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException)
         {
@@ -509,6 +524,8 @@ public sealed class MainViewModel : ObservableObject
         DuplicateSnapshotConfirmed = false;
         DateSnapshotConfirmed = false;
         _dateApplyCompleted = false;
+        _retainedDateDecisions.Clear();
+        _pathsReopenedByUndo.Clear();
         SelectedDateItem = null;
         SetPage(WorkflowPage.Configuration);
         StatusMessage = "Ready to configure a session.";
@@ -519,7 +536,9 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(CanConfirmDateSnapshot));
     }
 
-    private async void ScanDates()
+    private async void ScanDates() => await ScanDatesAsync();
+
+    private async Task ScanDatesAsync()
     {
         try
         {
@@ -623,11 +642,12 @@ public sealed class MainViewModel : ObservableObject
             var decisions = DateItems.Select(item => item.ToDecision()).ToArray();
             var result = await _dateRepairService.ApplyAsync(
                 _dateReportPath, _dateReport, _dateSnapshot, decisions, ArtifactRoot);
-            StatusMessage = $"Applied {result.AppliedCount} date change(s); verification passed.";
             _dateApplyCompleted = true;
             OnPropertyChanged(nameof(CanConfirmDateSnapshot));
+            await LoadUndoAsync();
+            SetPage(WorkflowPage.DateUndo);
             RaiseDateCommandStates();
-            LoadUndo();
+            StatusMessage = $"Applied {result.AppliedCount} date change(s); verification passed. Select files to undo.";
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException)
         {
@@ -645,11 +665,11 @@ public sealed class MainViewModel : ObservableObject
         try
         {
             var manifestPath = _dateRepairService.GetUndoManifestPath(ArtifactRoot);
-            var entries = await _dateRepairService.ReadUndoEntriesAsync(manifestPath);
+            var entries = await _dateRepairService.ReadActiveUndoEntriesAsync(manifestPath);
             UndoItems.Clear();
             foreach (var entry in entries.Reverse())
             {
-                UndoItems.Add(new DateUndoRowViewModel(entry));
+                UndoItems.Add(new DateUndoRowViewModel(entry, RaiseDateCommandStates));
             }
             RaiseDateCommandStates();
         }
@@ -668,8 +688,15 @@ public sealed class MainViewModel : ObservableObject
                 .Select(item => item.Path)
                 .ToArray();
             await _dateRepairService.UndoAsync(manifestPath, selected, ArtifactRoot);
-            StatusMessage = $"Undid {selected.Length} selected date change(s).";
-            LoadUndo();
+            RememberUndoneDatePaths(selected);
+            ReopenDateCycleAfterUndo();
+            await ScanDatesAsync();
+            await LoadUndoAsync();
+            SetPage(WorkflowPage.DateWork);
+            var reopened = DateItems.Count(item => item.IsProposed && !item.HasDecision);
+            StatusMessage = UndoItems.Count == 0
+                ? $"Undid {selected.Length} selected date change(s). {reopened} restored file(s) need a new decision."
+                : $"Undid {selected.Length} selected date change(s). {UndoItems.Count} still applied. {reopened} restored file(s) need a new decision.";
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException)
         {
@@ -677,8 +704,102 @@ public sealed class MainViewModel : ObservableObject
         }
     }
 
+    private void ReopenDateCycleAfterUndo()
+    {
+        _dateReport = null;
+        _dateReportPath = null;
+        _dateSnapshot = null;
+        _dateSnapshotName = null;
+        _dateApplyCompleted = false;
+        DateSnapshotConfirmed = false;
+        DateItems.Clear();
+        SelectedDateItem = null;
+        OnPropertyChanged(nameof(DateReportPath));
+        OnPropertyChanged(nameof(DateSummary));
+        OnPropertyChanged(nameof(DateSnapshotName));
+        OnPropertyChanged(nameof(CanConfirmDateSnapshot));
+        RaiseDateCommandStates();
+    }
+
+    private bool CanChangeDateDecision() =>
+        _dateSnapshot is null && !_dateApplyCompleted;
+
+    private IEnumerable<DateReviewRowViewModel> BulkApproveCandidates(
+        Func<DateReviewRowViewModel, bool> match) =>
+        DateItems.Where(item =>
+            item.IsProposed
+            && item.CanChangeDecision()
+            && !item.IsApproved
+            && match(item));
+
+    private void ApproveMatching(Func<DateReviewRowViewModel, bool> match)
+    {
+        foreach (var item in BulkApproveCandidates(match).ToArray())
+        {
+            item.Decision = "Approve";
+        }
+    }
+
+    private void RefreshDateBulkApproveGroups()
+    {
+        var candidates = BulkApproveCandidates(_ => true).ToArray();
+        var groups = new List<DateBulkApproveGroup>();
+        foreach (var confidence in candidates
+            .Select(item => item.Confidence)
+            .Where(confidence => !string.IsNullOrWhiteSpace(confidence))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(ConfidenceSortKey)
+            .ThenBy(confidence => confidence, StringComparer.OrdinalIgnoreCase))
+        {
+            var count = candidates.Count(item =>
+                item.Confidence.Equals(confidence, StringComparison.OrdinalIgnoreCase));
+            var value = confidence;
+            groups.Add(new DateBulkApproveGroup(
+                $"confidence:{value}",
+                $"Approve all {value} ({count})",
+                () => ApproveMatching(item =>
+                    item.Confidence.Equals(value, StringComparison.OrdinalIgnoreCase))));
+        }
+
+        foreach (var kind in candidates
+            .Select(item => item.EvidenceKind)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(kind => kind, StringComparer.OrdinalIgnoreCase))
+        {
+            var value = kind;
+            var count = candidates.Count(item =>
+                item.EvidenceKind.Equals(value, StringComparison.OrdinalIgnoreCase));
+            groups.Add(new DateBulkApproveGroup(
+                $"kind:{value}",
+                $"Approve all {value} ({count})",
+                () => ApproveMatching(item =>
+                    item.EvidenceKind.Equals(value, StringComparison.OrdinalIgnoreCase))));
+        }
+
+        DateBulkApproveGroups.Clear();
+        foreach (var group in groups)
+        {
+            DateBulkApproveGroups.Add(group);
+        }
+    }
+
+    private static int ConfidenceSortKey(string confidence) => confidence.ToLowerInvariant() switch
+    {
+        "high" => 0,
+        "medium" => 1,
+        "low" => 2,
+        "none" => 3,
+        _ => 4
+    };
+
+    private bool CanScanDates() =>
+        _currentPage == WorkflowPage.DateWork && _dateReport is null;
+
     private bool CanCreateDateSnapshot() =>
-        _dateReport is not null && DateReviewDecisionPolicy.CanCreateSnapshot(DateItems);
+        _dateReport is not null
+        && _dateSnapshot is null
+        && !_dateApplyCompleted
+        && DateReviewDecisionPolicy.CanCreateSnapshot(DateItems);
 
     private bool CanApplyDates() =>
         !_dateApplyCompleted
@@ -717,7 +838,29 @@ public sealed class MainViewModel : ObservableObject
         && File.Exists(_duplicateArtifacts.ApplyLogPath)
         && _workflow.Session.State == QnapPhotoManager.Models.WorkflowState.RemediationApplied;
 
-    private bool CanUndoSelected() => UndoItems.Any(item => item.IsSelected);
+    private bool CanUndoSelected() =>
+        _currentPage == WorkflowPage.DateUndo && UndoItems.Any(item => item.IsSelected);
+
+    private bool CanOpenDateUndo() =>
+        _currentPage == WorkflowPage.DateWork && UndoItems.Count > 0;
+
+    private void OpenDateUndo()
+    {
+        SetPage(WorkflowPage.DateUndo);
+        StatusMessage = $"{UndoItems.Count} applied date change(s) can still be undone.";
+        RaiseDateCommandStates();
+    }
+
+    private bool CanSelectAllDateUndo() =>
+        _currentPage == WorkflowPage.DateUndo && UndoItems.Count > 0;
+
+    private void SelectAllDateUndo()
+    {
+        foreach (var item in UndoItems)
+        {
+            item.IsSelected = true;
+        }
+    }
 
     private bool CanUndoSelectedDuplicates() =>
         _duplicateConfig is not null
@@ -726,9 +869,19 @@ public sealed class MainViewModel : ObservableObject
 
     private void RaiseDateCommandStates()
     {
+        OnPropertyChanged(nameof(DateSummary));
+        OnPropertyChanged(nameof(CanConfirmDateSnapshot));
+        RefreshDateBulkApproveGroups();
+        ScanDatesCommand.RaiseCanExecuteChanged();
         CreateDateSnapshotCommand.RaiseCanExecuteChanged();
         ApplyDatesCommand.RaiseCanExecuteChanged();
         UndoSelectedCommand.RaiseCanExecuteChanged();
+        OpenDateUndoCommand.RaiseCanExecuteChanged();
+        SelectAllDateUndoCommand.RaiseCanExecuteChanged();
+        foreach (var item in DateItems)
+        {
+            item.RaiseDecisionCommandStates();
+        }
         DuplicateApplyCommand.RaiseCanExecuteChanged();
         DuplicateVerifyCommand.RaiseCanExecuteChanged();
         UndoSelectedDuplicatesCommand.RaiseCanExecuteChanged();
@@ -770,14 +923,96 @@ public sealed class MainViewModel : ObservableObject
         RaiseDateCommandStates();
     }
 
+    internal void MarkDateApplyCompletedForTests()
+    {
+        _dateApplyCompleted = true;
+        OnPropertyChanged(nameof(CanConfirmDateSnapshot));
+        RaiseDateCommandStates();
+    }
+
+    internal void AddDateUndoForTests(DateUndoEntry entry)
+    {
+        UndoItems.Add(new DateUndoRowViewModel(entry, RaiseDateCommandStates));
+        RaiseDateCommandStates();
+    }
+
+    internal void ReopenDateCycleAfterUndoForTests()
+    {
+        ReopenDateCycleAfterUndo();
+        RaiseDateCommandStates();
+    }
+
+    internal void RememberUndoneDatePathsForTests(params string[] paths) =>
+        RememberUndoneDatePaths(paths);
+
     private void PopulateDateItems(IEnumerable<DateReviewItem> items)
     {
         DateItems.Clear();
         foreach (var item in items)
         {
-            DateItems.Add(new DateReviewRowViewModel(item, RaiseDateCommandStates));
+            var row = new DateReviewRowViewModel(item, OnDateRowDecisionChanged, CanChangeDateDecision);
+            RestoreRetainedDecision(row);
+            DateItems.Add(row);
         }
-        SelectedDateItem = DateItems.FirstOrDefault();
+        SelectedDateItem = DateItems.FirstOrDefault(item => item.IsProposed && !item.HasDecision)
+            ?? DateItems.FirstOrDefault();
+    }
+
+    private void RememberDecision(DateReviewRowViewModel row)
+    {
+        var path = System.IO.Path.GetFullPath(row.Path);
+        if (row.IsProposed && row.HasDecision)
+        {
+            _retainedDateDecisions[path] = row.Decision;
+            return;
+        }
+
+        _retainedDateDecisions.Remove(path);
+    }
+
+    private void RememberUndoneDatePaths(IEnumerable<string> paths)
+    {
+        foreach (var path in paths)
+        {
+            var fullPath = System.IO.Path.GetFullPath(path);
+            _pathsReopenedByUndo.Add(fullPath);
+            _retainedDateDecisions.Remove(fullPath);
+        }
+    }
+
+    private void RestoreRetainedDecision(DateReviewRowViewModel row)
+    {
+        if (!row.IsProposed)
+        {
+            return;
+        }
+
+        var path = System.IO.Path.GetFullPath(row.Path);
+        if (_pathsReopenedByUndo.Remove(path))
+        {
+            _retainedDateDecisions.Remove(path);
+            return;
+        }
+
+        if (_retainedDateDecisions.TryGetValue(path, out var decision))
+        {
+            row.Decision = decision;
+        }
+    }
+
+    private void OnDateRowDecisionChanged(DateReviewRowViewModel row)
+    {
+        RememberDecision(row);
+        SelectedDateItem = row;
+        RaiseDateCommandStates();
+        if (DateReviewDecisionPolicy.CanCreateSnapshot(DateItems))
+        {
+            StatusMessage = "Decisions are complete. Create a snapshot before apply.";
+        }
+        else if (DateReviewDecisionPolicy.IsSkipOnlyReviewComplete(DateItems))
+        {
+            StatusMessage = "Skip is recorded. Nothing is approved, so there is nothing to snapshot. Undo a still-applied file or reset when finished.";
+        }
     }
 
     private DateReviewReport CreateApprovedDateReport()
@@ -802,15 +1037,14 @@ public sealed class MainViewModel : ObservableObject
     private void UpdateDateEvidencePreview()
     {
         _datePreview = null;
+        _datePreviewMessage = string.Empty;
         if (_selectedDateItem is null)
         {
             _dateEvidenceSummary = "Select a date proposal to inspect its evidence.";
         }
         else
         {
-            _dateEvidenceSummary =
-                $"Source: {_selectedDateItem.Source}; raw value: {_selectedDateItem.RawValue}; " +
-                $"timezone: {_selectedDateItem.TimezoneDescription}. {_selectedDateItem.Reason}";
+            _dateEvidenceSummary = _selectedDateItem.DecisionHeadline;
             try
             {
                 var image = new BitmapImage();
@@ -823,12 +1057,13 @@ public sealed class MainViewModel : ObservableObject
             }
             catch (Exception)
             {
-                _dateEvidenceSummary += " Preview unavailable for this file.";
+                _datePreviewMessage = "Preview unavailable for this file.";
             }
         }
 
         OnPropertyChanged(nameof(DatePreview));
         OnPropertyChanged(nameof(DateEvidenceSummary));
+        OnPropertyChanged(nameof(DatePreviewMessage));
     }
 
     private void RefreshSessionProperties()
@@ -858,54 +1093,115 @@ public sealed class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(ConfigurationPageVisibility));
         OnPropertyChanged(nameof(DuplicateWorkPageVisibility));
         OnPropertyChanged(nameof(DateWorkPageVisibility));
+        OnPropertyChanged(nameof(DateUndoPageVisibility));
+    }
+
+    internal void ShowDateUndoPageForTests()
+    {
+        SetPage(WorkflowPage.DateUndo);
+        RaiseDateCommandStates();
+    }
+
+    internal void ReturnToDateWorkForTests()
+    {
+        SetPage(WorkflowPage.DateWork);
+        RaiseDateCommandStates();
     }
 
     private string CreateSnapshotName(string operation) =>
         $"QPM-{(operation == "duplicate" ? "DUP" : "DT")}-{SessionId[..8]}-{DateTimeOffset.UtcNow:yyMMdd-HHmmss}";
 }
 
-public sealed class DateReviewRowViewModel(DateReviewItem item, Action decisionChanged) : ObservableObject
+public sealed class DateReviewRowViewModel : ObservableObject
 {
-    private string _decision = item.Status.Equals("Proposed", StringComparison.OrdinalIgnoreCase)
-        ? "Undecided"
-        : "Skip";
+    private readonly Action<DateReviewRowViewModel> _decisionChanged;
+    private readonly Func<bool> _canChangeDecision;
+    private string _decision;
 
-    public DateReviewItem Item => item;
-    public string Path => item.Path;
-    public string FileName => System.IO.Path.GetFileName(item.Path);
-    public string Status => item.Status;
-    public string Confidence => item.Confidence;
-    public string Source => item.Source ?? string.Empty;
-    public string ProposedCaptureTimeUtc => item.ProposedCaptureTimeUtc ?? string.Empty;
-    public string ProposedLocalTime =>
-        DateTimeOffset.TryParse(item.ProposedCaptureTimeUtc, out var proposed)
-            ? proposed.ToLocalTime().ToString("g")
-            : string.Empty;
-    public string CurrentCreationTimeUtc => item.CurrentCreationTimeUtc;
-    public string CurrentLastWriteTimeUtc => item.CurrentLastWriteTimeUtc;
-    public string SizeDescription => item.Size == 0 ? "(unknown)" : $"{item.Size:N0} bytes";
-    public string RawValue => item.RawValue ?? "(none)";
-    public string ParsedFilenameToken => item.ParsedFilenameToken ?? "(none)";
-    public string TimezoneDescription => string.IsNullOrWhiteSpace(item.TimezoneOffset)
-        ? item.TimezoneKind ?? "unspecified"
-        : $"{item.TimezoneKind} ({item.TimezoneOffset})";
-    public string Policy => item.Policy;
-    public string Reason => item.Reason;
-    public bool IsProposed => item.Status.Equals("Proposed", StringComparison.OrdinalIgnoreCase);
+    public DateReviewRowViewModel(
+        DateReviewItem item,
+        Action<DateReviewRowViewModel> decisionChanged,
+        Func<bool>? canChangeDecision = null)
+    {
+        Item = item;
+        _decisionChanged = decisionChanged;
+        _canChangeDecision = canChangeDecision ?? (() => true);
+        _decision = item.Status.Equals("Proposed", StringComparison.OrdinalIgnoreCase)
+            ? "Undecided"
+            : "Skip";
+        ApproveCommand = new RelayCommand(() => ApplyDecision("Approve"), () => CanChangeDecision() && IsProposed);
+        SkipCommand = new RelayCommand(() => ApplyDecision("Skip"), () => CanChangeDecision() && IsProposed);
+    }
+
+    public DateReviewItem Item { get; }
+    public RelayCommand ApproveCommand { get; }
+    public RelayCommand SkipCommand { get; }
+    public string Path => Item.Path;
+    public string FileName => System.IO.Path.GetFileName(Item.Path);
+    public string Status => Item.Status;
+    public string Confidence => Item.Confidence;
+    public string EvidenceKind => DateEvidencePresentation.EvidenceKind(Item);
+    public string ClassifierLabel => $"{Confidence} · {EvidenceKind}";
+    public string Source => Item.Source ?? string.Empty;
+    public string ProposedCaptureTimeUtc => DateEvidencePresentation.CompactUtc(Item.ProposedCaptureTimeUtc);
+    public string ProposedLocalTime => DateEvidencePresentation.CompactLocal(Item.ProposedCaptureTimeUtc);
+    public string DecisionHeadline => DateEvidencePresentation.BuildHeadline(Item);
+    public IReadOnlyList<DateEvidenceRow> EvidenceRows => DateEvidencePresentation.BuildRows(Item);
+    public string DecisionStatusLine =>
+        IsAlreadyApplied
+            ? $"{ClassifierLabel} · Already applied"
+            : string.IsNullOrWhiteSpace(ProposedLocalTime)
+                ? $"{ClassifierLabel} · {DecisionLabel}"
+                : $"{ClassifierLabel} · Proposed {ProposedLocalTime} · {DecisionLabel}";
+    public string CurrentCreationTimeUtc => DateEvidencePresentation.CompactUtc(Item.CurrentCreationTimeUtc);
+    public string CurrentLastWriteTimeUtc => DateEvidencePresentation.CompactUtc(Item.CurrentLastWriteTimeUtc);
+    public string SizeDescription => Item.Size == 0 ? "(unknown)" : $"{Item.Size:N0} bytes";
+    public string RawValue => Item.RawValue ?? "(none)";
+    public string ParsedFilenameToken => Item.ParsedFilenameToken ?? "(none)";
+    public string TimezoneDescription => string.IsNullOrWhiteSpace(Item.TimezoneOffset)
+        ? Item.TimezoneKind ?? "unspecified"
+        : $"{Item.TimezoneKind} ({Item.TimezoneOffset})";
+    public string Policy => Item.Policy;
+    public string Reason => Item.Reason;
+    public bool IsProposed => Item.Status.Equals("Proposed", StringComparison.OrdinalIgnoreCase);
+    public bool IsAlreadyApplied => Item.Status.Equals("AlreadyApplied", StringComparison.OrdinalIgnoreCase);
     public bool HasDecision => !string.Equals(Decision, "Undecided", StringComparison.OrdinalIgnoreCase);
     public bool IsApproved => string.Equals(Decision, "Approve", StringComparison.OrdinalIgnoreCase);
+    public bool IsSkipped => string.Equals(Decision, "Skip", StringComparison.OrdinalIgnoreCase);
+    public string DecisionLabel => IsAlreadyApplied
+        ? "Already applied"
+        : HasDecision ? Decision : "Undecided";
+    public bool CanChangeDecision() => _canChangeDecision();
+
+    public void RaiseDecisionCommandStates()
+    {
+        ApproveCommand.RaiseCanExecuteChanged();
+        SkipCommand.RaiseCanExecuteChanged();
+    }
+
     public string Decision
     {
         get => _decision;
-        set
+        set => ApplyDecision(value);
+    }
+
+    private void ApplyDecision(string decision)
+    {
+        if (!CanChangeDecision())
         {
-            if (SetProperty(ref _decision, value))
-            {
-                OnPropertyChanged(nameof(IsApproved));
-                OnPropertyChanged(nameof(HasDecision));
-                decisionChanged();
-            }
+            return;
         }
+
+        if (SetProperty(ref _decision, decision, nameof(Decision)))
+        {
+            OnPropertyChanged(nameof(IsApproved));
+            OnPropertyChanged(nameof(IsSkipped));
+            OnPropertyChanged(nameof(HasDecision));
+            OnPropertyChanged(nameof(DecisionLabel));
+            OnPropertyChanged(nameof(DecisionStatusLine));
+        }
+
+        _decisionChanged(this);
     }
 
     public DateDecision ToDecision()
@@ -919,16 +1215,37 @@ public sealed class DateReviewRowViewModel(DateReviewItem item, Action decisionC
     }
 }
 
-public sealed class DateUndoRowViewModel(DateUndoEntry entry) : ObservableObject
+public sealed class DateBulkApproveGroup
+{
+    public DateBulkApproveGroup(string key, string label, Action approve)
+    {
+        Key = key;
+        Label = label;
+        ApproveCommand = new RelayCommand(approve);
+    }
+
+    public string Key { get; }
+    public string Label { get; }
+    public RelayCommand ApproveCommand { get; }
+}
+
+public sealed class DateUndoRowViewModel(DateUndoEntry entry, Action selectionChanged) : ObservableObject
 {
     private bool _isSelected;
 
     public string Path => entry.Path;
+    public string FileName => System.IO.Path.GetFileName(entry.Path);
     public string AppliedAt => entry.AfterCreationTimeUtc.ToLocalTime().ToString("g");
     public bool IsSelected
     {
         get => _isSelected;
-        set => SetProperty(ref _isSelected, value);
+        set
+        {
+            if (SetProperty(ref _isSelected, value))
+            {
+                selectionChanged();
+            }
+        }
     }
 }
 

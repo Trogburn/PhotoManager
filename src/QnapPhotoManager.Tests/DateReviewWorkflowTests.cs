@@ -24,8 +24,13 @@ public sealed class DateReviewRowViewModelTests
 
         row.Decision = "Skip";
         Assert.True(row.HasDecision);
+        Assert.True(row.IsSkipped);
         Assert.False(row.IsApproved);
         Assert.Equal("skip", row.ToDecision().Action);
+
+        row.ApproveCommand.Execute(null);
+        Assert.True(row.IsApproved);
+        Assert.Equal("Approve", row.DecisionLabel);
     }
 
     [Fact]
@@ -48,7 +53,7 @@ public sealed class DateReviewRowViewModelTests
             Policy = "CreationTimeOnly",
             Reason = "Multiple date sources disagree."
         };
-        var row = new DateReviewRowViewModel(item, () => { });
+        var row = new DateReviewRowViewModel(item, _ => { });
 
         Assert.Equal("Skip", row.Decision);
         Assert.Equal("2026-01-01_keep.jpg", row.FileName);
@@ -64,7 +69,7 @@ public sealed class DateReviewRowViewModelTests
             Path = @"\\server\share\photos\file.jpg",
             Status = status,
             ProposedCaptureTimeUtc = "2026-01-01T00:00:00Z"
-        }, () => { });
+        }, _ => { });
 }
 
 public sealed class DateReviewDecisionPolicyTests
@@ -86,6 +91,7 @@ public sealed class DateReviewDecisionPolicyTests
         first.Decision = "Skip";
         Assert.False(DateReviewDecisionPolicy.HasApprovedProposal([first, second]));
         Assert.False(DateReviewDecisionPolicy.CanCreateSnapshot([first, second]));
+        Assert.True(DateReviewDecisionPolicy.IsSkipOnlyReviewComplete([first, second]));
     }
 
     [Fact]
@@ -113,7 +119,7 @@ public sealed class DateReviewDecisionPolicyTests
             Path = @"\\server\share\photos\" + name,
             Status = "Proposed",
             ProposedCaptureTimeUtc = "2026-01-01T00:00:00Z"
-        }, () => { });
+        }, _ => { });
 }
 
 public sealed class MainViewModelDateWorkflowTests : TestBase
@@ -133,6 +139,7 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
             Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
             Assert.Equal(WorkflowState.Configured, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
             Assert.Contains("No duplicate workflow artifacts", viewModel.DuplicateArtifactSummary);
+            Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
             Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
             Assert.False(viewModel.ApplyDatesCommand.CanExecute(null));
         }
@@ -183,27 +190,241 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void SnapshotAndApplyStayDisabledUntilEveryProposalIsDecided()
+    public void DateWorkCommandsFollowScanSnapshotConfirmAndApply()
     {
         var root = NewTempDirectory();
         try
         {
             var viewModel = CreateViewModel(root);
+            viewModel.StartDateWorkCommand.Execute(null);
+            Assert.True(SpinWait.SpinUntil(
+                () => viewModel.CurrentPage == WorkflowPage.DateWork,
+                TimeSpan.FromSeconds(3)));
+
+            Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
+            Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
+            Assert.False(viewModel.ApplyDatesCommand.CanExecute(null));
+            Assert.False(viewModel.CanConfirmDateSnapshot);
+
             var first = @"\\server\share\photos\one.jpg";
             var second = @"\\server\share\photos\two.jpg";
             viewModel.LoadDateReviewForTests(CreateReport(first, second));
-
+            Assert.False(viewModel.ScanDatesCommand.CanExecute(null));
             Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
+            Assert.True(viewModel.DateItems[0].ApproveCommand.CanExecute(null));
+
             viewModel.DateItems[0].Decision = "Approve";
             Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
-            viewModel.DateItems[1].Decision = "Skip";
+            viewModel.DateItems[1].SkipCommand.Execute(null);
             Assert.True(viewModel.CreateDateSnapshotCommand.CanExecute(null));
+            Assert.False(viewModel.ScanDatesCommand.CanExecute(null));
+            Assert.False(viewModel.CanConfirmDateSnapshot);
 
             viewModel.MarkDateSnapshotForTests(new DateSnapshot("review.json", DateTimeOffset.UtcNow, []));
             Assert.True(viewModel.CanConfirmDateSnapshot);
+            Assert.False(viewModel.ScanDatesCommand.CanExecute(null));
+            Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
             Assert.False(viewModel.ApplyDatesCommand.CanExecute(null));
+            Assert.False(viewModel.DateItems[0].ApproveCommand.CanExecute(null));
+            Assert.False(viewModel.DateItems[0].SkipCommand.CanExecute(null));
+
             viewModel.DateSnapshotConfirmed = true;
             Assert.True(viewModel.ApplyDatesCommand.CanExecute(null));
+            Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
+
+            viewModel.MarkDateApplyCompletedForTests();
+            Assert.False(viewModel.ApplyDatesCommand.CanExecute(null));
+            Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
+            Assert.False(viewModel.ScanDatesCommand.CanExecute(null));
+            Assert.False(viewModel.CanConfirmDateSnapshot);
+            Assert.False(viewModel.DateItems[0].ApproveCommand.CanExecute(null));
+
+            viewModel.ReopenDateCycleAfterUndoForTests();
+            Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
+            Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
+            Assert.False(viewModel.ApplyDatesCommand.CanExecute(null));
+            Assert.False(viewModel.CanConfirmDateSnapshot);
+            Assert.Empty(viewModel.DateItems);
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void SelectingADateUndoRowEnablesUndoImmediately()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var viewModel = CreateViewModel(root);
+            viewModel.AddDateUndoForTests(new DateUndoEntry(
+                @"\\server\share\photos\keep.jpg",
+                DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.Parse("2026-01-01T06:00:00Z"),
+                DateTimeOffset.UtcNow,
+                true));
+
+            Assert.False(viewModel.UndoSelectedCommand.CanExecute(null));
+            viewModel.UndoItems[0].IsSelected = true;
+            Assert.False(viewModel.UndoSelectedCommand.CanExecute(null));
+            viewModel.ShowDateUndoPageForTests();
+            Assert.True(viewModel.UndoSelectedCommand.CanExecute(null));
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void RescanAfterUndoReopensOnlyTheUndoneFile()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var viewModel = CreateViewModel(root);
+            var keep = @"\\server\share\photos\2026-01-01_keep.jpg";
+            var candidate = @"\\server\share\photos\2026-01-01_candidate.jpg";
+            viewModel.LoadDateReviewForTests(CreateReport(keep, candidate));
+            viewModel.DateItems[0].Decision = "Approve";
+            viewModel.DateItems[1].Decision = "Skip";
+
+            viewModel.RememberUndoneDatePathsForTests(keep);
+            var rescan = CreateReport(keep, candidate);
+            rescan.Items[1] = new DateReviewItem
+            {
+                Path = candidate,
+                Status = "AlreadyApplied",
+                Confidence = "Medium",
+                Source = "filename",
+                ProposedCaptureTimeUtc = "2026-01-01T06:00:00Z"
+            };
+            viewModel.LoadDateReviewForTests(rescan);
+
+            Assert.True(viewModel.DateItems[0].IsProposed);
+            Assert.False(viewModel.DateItems[0].HasDecision);
+            Assert.True(viewModel.DateItems[1].IsAlreadyApplied);
+            Assert.False(viewModel.DateItems[1].ApproveCommand.CanExecute(null));
+
+            viewModel.LoadDateReviewForTests(CreateReport(keep, candidate));
+            Assert.False(viewModel.DateItems[0].HasDecision);
+            Assert.True(viewModel.DateItems[1].IsSkipped);
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void SkippingTheOnlyProposalRecordsSkipWithoutEnablingSnapshot()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var viewModel = CreateViewModel(root);
+            viewModel.StartDateWorkCommand.Execute(null);
+            Assert.True(SpinWait.SpinUntil(
+                () => viewModel.CurrentPage == WorkflowPage.DateWork,
+                TimeSpan.FromSeconds(3)));
+            viewModel.LoadDateReviewForTests(CreateReport(@"\\server\share\photos\keep.jpg"));
+
+            viewModel.DateItems[0].SkipCommand.Execute(null);
+
+            Assert.True(viewModel.DateItems[0].IsSkipped);
+            Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
+            Assert.Contains("nothing to snapshot", viewModel.StatusMessage, StringComparison.OrdinalIgnoreCase);
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void DateUndoPageOpensFromReviewAndReturnsAfterUndoNavigation()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var viewModel = CreateViewModel(root);
+            viewModel.StartDateWorkCommand.Execute(null);
+            Assert.True(SpinWait.SpinUntil(
+                () => viewModel.CurrentPage == WorkflowPage.DateWork,
+                TimeSpan.FromSeconds(3)));
+            viewModel.AddDateUndoForTests(new DateUndoEntry(
+                @"\\server\share\photos\keep.jpg",
+                DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.Parse("2026-01-01T06:00:00Z"),
+                DateTimeOffset.UtcNow,
+                true));
+
+            Assert.True(viewModel.OpenDateUndoCommand.CanExecute(null));
+            viewModel.OpenDateUndoCommand.Execute(null);
+            Assert.Equal(WorkflowPage.DateUndo, viewModel.CurrentPage);
+            Assert.True(viewModel.SelectAllDateUndoCommand.CanExecute(null));
+            viewModel.SelectAllDateUndoCommand.Execute(null);
+            Assert.True(viewModel.UndoItems[0].IsSelected);
+            Assert.True(viewModel.UndoSelectedCommand.CanExecute(null));
+
+            viewModel.ReturnToDateWorkForTests();
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
+            Assert.True(viewModel.OpenDateUndoCommand.CanExecute(null));
+            Assert.False(viewModel.UndoSelectedCommand.CanExecute(null));
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void BulkApproveGroupsCoverEachConfidenceAndEvidenceKind()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var viewModel = CreateViewModel(root);
+            viewModel.LoadDateReviewForTests(new DateReviewReport
+            {
+                Items =
+                [
+                    new DateReviewItem
+                    {
+                        Path = @"\\server\share\photos\one.jpg",
+                        Status = "Proposed",
+                        Confidence = "Medium",
+                        Source = "filename",
+                        ParsedFilenameToken = "2026-01-01",
+                        RawValue = "2026-01-01"
+                    },
+                    new DateReviewItem
+                    {
+                        Path = @"\\server\share\photos\two.jpg",
+                        Status = "Proposed",
+                        Confidence = "High",
+                        Source = "exif-DateTimeOriginal",
+                        RawValue = "2026:01:01 12:00:00"
+                    },
+                    new DateReviewItem
+                    {
+                        Path = @"\\server\share\photos\three.jpg",
+                        Status = "Proposed",
+                        Confidence = "Low",
+                        Source = "folder",
+                        RawValue = "2026-01-01"
+                    }
+                ]
+            });
+
+            Assert.Equal("Medium · Filename, no EXIF", viewModel.DateItems[0].ClassifierLabel);
+            Assert.Equal("High · EXIF, no filename date", viewModel.DateItems[1].ClassifierLabel);
+            Assert.Equal("Low · Folder name", viewModel.DateItems[2].ClassifierLabel);
+            Assert.Contains(viewModel.DateBulkApproveGroups, group => group.Label == "Approve all High (1)");
+            Assert.Contains(viewModel.DateBulkApproveGroups, group => group.Label == "Approve all Medium (1)");
+            Assert.Contains(viewModel.DateBulkApproveGroups, group => group.Label == "Approve all Low (1)");
+            Assert.Contains(viewModel.DateBulkApproveGroups, group => group.Label == "Approve all Filename, no EXIF (1)");
+            Assert.Contains(viewModel.DateBulkApproveGroups, group => group.Label == "Approve all EXIF, no filename date (1)");
+            Assert.Contains(viewModel.DateBulkApproveGroups, group => group.Label == "Approve all Folder name (1)");
+
+            viewModel.DateBulkApproveGroups.Single(group => group.Key == "kind:Filename, no EXIF")
+                .ApproveCommand.Execute(null);
+            Assert.True(viewModel.DateItems[0].IsApproved);
+            Assert.False(viewModel.DateItems[1].IsApproved);
+
+            viewModel.DateBulkApproveGroups.Single(group => group.Key == "confidence:High")
+                .ApproveCommand.Execute(null);
+            Assert.True(viewModel.DateItems[1].IsApproved);
+            Assert.False(viewModel.DateItems[2].IsApproved);
         }
         finally { Delete(root); }
     }
@@ -218,9 +439,13 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
             viewModel.LoadDateReviewForTests(CreateReport(@"\\server\share\photos\missing-preview.jpg"));
 
             Assert.NotNull(viewModel.SelectedDateItem);
-            Assert.Contains("filename", viewModel.DateEvidenceSummary, StringComparison.OrdinalIgnoreCase);
+            viewModel.SelectedDateItem!.ApproveCommand.Execute(null);
+            Assert.True(viewModel.SelectedDateItem.IsApproved);
+            Assert.Contains("Filename has a date", viewModel.DateEvidenceSummary, StringComparison.Ordinal);
             Assert.Contains("2026-01-01", viewModel.DateEvidenceSummary, StringComparison.Ordinal);
-            Assert.Contains("Preview unavailable", viewModel.DateEvidenceSummary, StringComparison.Ordinal);
+            Assert.Contains("EXIF does not", viewModel.DateEvidenceSummary, StringComparison.Ordinal);
+            Assert.DoesNotContain("Selected filename", viewModel.DateEvidenceSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("Preview unavailable for this file.", viewModel.DatePreviewMessage);
         }
         finally { Delete(root); }
     }
@@ -229,12 +454,16 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     {
         var policy = new PathPolicy(root);
         var store = new AtomicArtifactStore(policy);
-        return new MainViewModel(
+        var viewModel = new MainViewModel(
             new WorkflowStateMachine(),
             store,
             new DateRepairService(policy),
             new DuplicateWorkflowService(new PowerShellScriptRunner(), store, policy, root),
-            new FakeConfirmationService(true));
+            new FakeConfirmationService(true))
+        {
+            ArtifactRoot = root
+        };
+        return viewModel;
     }
 
     private static DateReviewReport CreateReport(params string[] paths) =>
@@ -259,6 +488,100 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
                 Reason = "Selected filename evidence over filesystem transfer timestamps."
             }).ToList()
         };
+}
+
+public sealed class DateEvidencePresentationTests
+{
+    [Fact]
+    public void FilenameProposalHighlightsMissingExifWithoutRepeatingEngineReason()
+    {
+        var item = new DateReviewItem
+        {
+            Path = @"\\server\share\photos\2026-01-01_keep.jpg",
+            Status = "Proposed",
+            Source = "filename",
+            RawValue = "2026-01-01",
+            ParsedFilenameToken = "2026-01-01",
+            CurrentCreationTimeUtc = "2026-09-13T06:29:22Z",
+            CurrentLastWriteTimeUtc = "2026-09-13T06:29:22Z",
+            Reason = "Selected filename evidence over filesystem transfer timestamps."
+        };
+
+        var headline = DateEvidencePresentation.BuildHeadline(item);
+        var rows = DateEvidencePresentation.BuildRows(item);
+
+        Assert.Equal("Filename has a date (2026-01-01). EXIF does not.", headline);
+        Assert.Equal("Filename, no EXIF", DateEvidencePresentation.EvidenceKind(item));
+        Assert.DoesNotContain("Selected filename", headline, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(rows, row => row.Label == "Filename" && row.IsSelected);
+        Assert.Contains(rows, row => row.Label == "EXIF" && row.IsMissing);
+        Assert.Contains(rows, row => row.Label == "Filesystem" && row.State == "Transfer only");
+    }
+
+    [Fact]
+    public void ReportDecisionSummaryIsUsedWhenPresent()
+    {
+        var item = new DateReviewItem
+        {
+            Status = "Proposed",
+            Source = "filename",
+            DecisionSummary = "Filename has a date (2026-01-01). EXIF does not.",
+            EvidenceComparison =
+            [
+                new DateEvidenceComparison { Label = "EXIF", State = "Missing", Detail = "No capture date" },
+                new DateEvidenceComparison { Label = "Filename", State = "Has date", Detail = "2026-01-01", Selected = true }
+            ]
+        };
+
+        Assert.Equal(item.DecisionSummary, DateEvidencePresentation.BuildHeadline(item));
+        Assert.Equal(2, DateEvidencePresentation.BuildRows(item).Count);
+    }
+
+    [Fact]
+    public void AlreadyAppliedItemIsVisibleButNotADecision()
+    {
+        var row = new DateReviewRowViewModel(new DateReviewItem
+        {
+            Path = @"\\server\share\photos\2026-01-01_candidate.jpg",
+            Status = "AlreadyApplied",
+            Source = "filename",
+            Confidence = "Medium",
+            ProposedCaptureTimeUtc = "2026-01-01T06:00:00Z",
+            DecisionSummary = "Already applied. Filename date (2026-01-01) already matches the file."
+        }, _ => { });
+
+        Assert.False(row.IsProposed);
+        Assert.True(row.IsAlreadyApplied);
+        Assert.Equal("Already applied", row.DecisionLabel);
+        Assert.Contains("Already applied", row.DecisionStatusLine, StringComparison.Ordinal);
+        Assert.False(row.ApproveCommand.CanExecute(null));
+        Assert.False(row.SkipCommand.CanExecute(null));
+        Assert.Equal(
+            "Already applied. Filename date (2026-01-01) already matches the file.",
+            DateEvidencePresentation.BuildHeadline(row.Item));
+    }
+
+    [Fact]
+    public void EvidenceKindCoversExifAndFolderSources()
+    {
+        Assert.Equal("EXIF, no filename date", DateEvidencePresentation.EvidenceKind(new DateReviewItem
+        {
+            Source = "exif-DateTimeOriginal",
+            RawValue = "2026:01:01 12:00:00",
+            Status = "Proposed"
+        }));
+        Assert.Equal("Folder name", DateEvidencePresentation.EvidenceKind(new DateReviewItem
+        {
+            Source = "folder",
+            RawValue = "2026-01-01",
+            Status = "Proposed"
+        }));
+        Assert.Equal("Manual date", DateEvidencePresentation.EvidenceKind(new DateReviewItem
+        {
+            Source = "manual",
+            Status = "Proposed"
+        }));
+    }
 }
 
 public sealed class FakeConfirmationService(bool result) : IConfirmationService

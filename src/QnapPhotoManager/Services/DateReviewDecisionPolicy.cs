@@ -20,6 +20,9 @@ public static class DateReviewDecisionPolicy
     public static bool CanCreateSnapshot(IEnumerable<DateReviewRowViewModel> items) =>
         HasCompleteProposedDecisions(items) && HasApprovedProposal(items);
 
+    public static bool IsSkipOnlyReviewComplete(IEnumerable<DateReviewRowViewModel> items) =>
+        HasCompleteProposedDecisions(items) && !HasApprovedProposal(items);
+
     public static bool CanApply(
         bool snapshotConfirmed,
         object? snapshot,
