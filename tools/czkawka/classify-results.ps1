@@ -50,7 +50,8 @@ function Get-NameQuality {
     if ($name -match '\d{4}[-_]\d{2}[-_]\d{2}') { $score += 2 }
     if ($name -notmatch '^(copy|img|image|dsc|pxl)[-_]?\d*$') { $score++ }
     if ($name.Length -ge 4) { $score++ }
-    if ($name -match '\s*\(\d+\)$') { $score -= 3 }
+    if ($name -match '(?i)^(img|image|dsc|pxl)[-_]?\d{8}(?:[_-]?\d{6})?$') { $score += 3 }
+    if ($name -match '(?i)(?:\s*-\s*copy|\s*\(\d+\))$') { $score -= 3 }
     return $score
 }
 
@@ -189,7 +190,7 @@ if ($paths.Count -gt 0) {
         if ($labels.Count -eq 0) { $labels += 'downloaded copy' }
 
         $protected = @($componentItems | Where-Object { $_.isReference -or (Test-PathMatch $_.path $protectedPaths) })
-        $candidates = @($componentItems | Sort-Object @{ Expression = { if (Test-PathMatch $_.path $preferredDirectories) { 0 } else { 1 } } }, @{ Expression = { if ($_.isReference) { 0 } else { 1 } } }, @{ Expression = { -[double]$_.width * [double]$_.height } }, @{ Expression = { -[long]$_.size } }, @{ Expression = { -(Get-NameQuality $_.path) } }, path)
+        $candidates = @($componentItems | Sort-Object @{ Expression = { if (Test-PathMatch $_.path $preferredDirectories) { 0 } else { 1 } } }, @{ Expression = { if ($_.isReference) { 0 } else { 1 } } }, @{ Expression = { -[double]$_.width * [double]$_.height } }, @{ Expression = { -(Get-NameQuality $_.path) } }, @{ Expression = { -[long]$_.size } }, path)
         $suggested = $candidates | Select-Object -First 1
         $suggestedPath = [string]$suggested.path
         $reason = if ($suggested.isReference -or (Test-PathMatch $suggestedPath $protectedPaths)) { 'Reference/protected item is retained; recommendation is advisory.' } elseif (Test-PathMatch $suggestedPath $preferredDirectories) { 'Preferred directory and file quality signals.' } else { 'Dimension, size, and filename quality signals.' }

@@ -152,6 +152,17 @@ try {
         throw "Original vs digitized EXIF mismatch was not a conflict. status=$($bothExifItem.status)"
     }
 
+    $minuteTolerancePath = Join-Path $root '2022-01-02_030406.jpg'
+    $localOffset = [TimeZoneInfo]::Local.GetUtcOffset([datetime]'2022-01-02T03:04:05').ToString('hh\:mm')
+    if ([TimeZoneInfo]::Local.GetUtcOffset([datetime]'2022-01-02T03:04:05').Ticks -ge 0) { $localOffset = "+$localOffset" } else { $localOffset = "-$localOffset" }
+    New-ExifJpeg -Path $minuteTolerancePath -Tags @{ 0x9003 = '2022:01:02 03:04:05'; 0x9011 = $localOffset }
+    $minuteToleranceReport = Join-Path $root 'minute-tolerance-review.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $minuteTolerancePath -OutputPath $minuteToleranceReport | Out-Null
+    $minuteToleranceItem = @((Get-Content -Path $minuteToleranceReport -Raw | ConvertFrom-Json).items)[0]
+    if ($minuteToleranceItem.status -ne 'Proposed' -or $minuteToleranceItem.source -ne 'exif-DateTimeOriginal') {
+        throw "Equivalent mixed-timezone evidence with a one-second difference was not proposed. status=$($minuteToleranceItem.status)"
+    }
+
     $cameraFile = Join-Path $root 'PXL_20240102_153045.txt'
     'camera' | Set-Content -Path $cameraFile -Encoding UTF8
     $cameraReport = Join-Path $root 'camera-review.json'

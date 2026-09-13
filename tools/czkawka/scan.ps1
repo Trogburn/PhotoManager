@@ -76,6 +76,18 @@ function Assert-ReadOnlyArguments {
     }
 }
 
+function Convert-ToWindowsCommandLineArgument {
+    param([string]$Value)
+
+    if ($Value.Length -eq 0) {
+        return '""'
+    }
+
+    $escaped = [regex]::Replace($Value, '(\\*)"', '$1$1\"')
+    $escaped = [regex]::Replace($escaped, '(\\+)$', '$1$1')
+    return '"' + $escaped + '"'
+}
+
 function Invoke-CzkawkaProcess {
     param(
         [string]$ExecutablePath,
@@ -97,8 +109,13 @@ function Invoke-CzkawkaProcess {
         $info.CreateNoWindow = $true
         $info.StandardOutputEncoding = [Text.Encoding]::UTF8
         $info.StandardErrorEncoding = [Text.Encoding]::UTF8
-        foreach ($argument in $Arguments) {
-            [void]$info.ArgumentList.Add($argument)
+        if ($null -ne $info.PSObject.Properties['ArgumentList']) {
+            foreach ($argument in $Arguments) {
+                [void]$info.ArgumentList.Add($argument)
+            }
+        }
+        else {
+            $info.Arguments = (@($Arguments | ForEach-Object { Convert-ToWindowsCommandLineArgument -Value $_ }) -join ' ')
         }
 
         $process = [Diagnostics.Process]::Start($info)

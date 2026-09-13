@@ -49,6 +49,26 @@ function Save-Decisions {
     param([hashtable]$DecisionMap)
     Ensure-ParentDirectory -FilePath $DecisionPath
     @($DecisionMap.Values | Sort-Object groupId) | ConvertTo-Json -Depth 8 | Set-Content -Path $DecisionPath -Encoding UTF8
+    Update-ReviewQueue
+}
+
+function Get-ReviewDecisionKey {
+    param([object]$Decision)
+
+    $groupId = [string](Get-ReviewValue -Object $Decision -Name 'groupId')
+    $path = [string](Get-ReviewValue -Object $Decision -Name 'path')
+    if (-not [string]::IsNullOrWhiteSpace($groupId) -and -not [string]::IsNullOrWhiteSpace($path)) { return "item:$groupId|$path" }
+    if (-not [string]::IsNullOrWhiteSpace($groupId)) { return "group:$groupId" }
+    return "path:$path"
+}
+
+function Get-DecisionSha256 {
+    param([string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Cannot queue a missing file for quarantine: $Path"
+    }
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
 function Get-DateProposal {
@@ -62,8 +82,8 @@ function Get-DateProposal {
 $decisionMap = @{}
 if (Test-Path -LiteralPath $DecisionPath) {
     foreach ($decision in @(Get-Content -LiteralPath $DecisionPath -Raw | ConvertFrom-Json)) {
-        $decisionKey = if ($decision.PSObject.Properties['groupId']) { [string]$decision.groupId } else { [string]$decision.path }
-        if (-not [string]::IsNullOrWhiteSpace($decisionKey)) { $decisionMap[$decisionKey] = $decision }
+        $decisionKey = Get-ReviewDecisionKey -Decision $decision
+        if ($decisionKey -ne 'path:') { $decisionMap[$decisionKey] = $decision }
     }
 }
 $script:protectedOverrides = @{}
@@ -75,6 +95,40 @@ $dateReviews = @{}
 if ($DateReviewPath -and (Test-Path -LiteralPath $DateReviewPath)) {
     $dateDocument = Get-Content -LiteralPath $DateReviewPath -Raw | ConvertFrom-Json
     foreach ($dateItem in @($dateDocument.items)) { $dateReviews[[string]$dateItem.path] = $dateItem }
+}
+
+function Get-ReviewedGroupIds {
+    $reviewed = @{}
+    foreach ($decision in $decisionMap.Values) {
+        $groupId = [string](Get-ReviewValue -Object $decision -Name 'groupId')
+        if (-not [string]::IsNullOrWhiteSpace($groupId)) {
+            $reviewed[$groupId] = $true
+            continue
+        }
+        $path = [string](Get-ReviewValue -Object $decision -Name 'path')
+        foreach ($group in $script:allGroups) {
+            if (@($group.items | Where-Object { $_.path -eq $path }).Count -gt 0) { $reviewed[[string]$group.groupId] = $true }
+        }
+    }
+    return $reviewed
+}
+
+function Update-ReviewQueue {
+    param([string]$PreferredGroupId)
+
+    $previousIndex = $script:currentIndex
+    $reviewed = Get-ReviewedGroupIds
+    $unreviewed = @($script:allGroups | Where-Object { -not $reviewed.ContainsKey([string]$_.groupId) })
+    $reviewedGroups = @($script:allGroups | Where-Object { $reviewed.ContainsKey([string]$_.groupId) })
+    $script:groups = @($(if ($script:showReviewed) { @($unreviewed + $reviewedGroups) } else { $unreviewed }))
+    $script:currentIndex = [math]::Min($previousIndex, [math]::Max(0, $script:groups.Count - 1))
+    if ($PreferredGroupId) {
+        for ($index = 0; $index -lt $script:groups.Count; $index++) {
+            if ($script:groups[$index].groupId -eq $PreferredGroupId) { $script:currentIndex = $index; break }
+        }
+    }
+    $script:currentItemIndex = 0
+    $script:remainingGroupCount = $unreviewed.Count
 }
 
 function Write-HtmlReport {
@@ -177,8 +231,9 @@ Add-Type -AssemblyName System.Drawing
 
 $form = New-Object Windows.Forms.Form
 $form.Text = 'Photo Review'
-$form.Width = 1280
-$form.Height = 820
+$form.Width = 1120
+$form.Height = 860
+$form.MinimumSize = New-Object Drawing.Size(900, 650)
 $form.StartPosition = 'CenterScreen'
 
 $header = New-Object Windows.Forms.Label
@@ -206,14 +261,33 @@ $images.AutoScroll = $true
 $images.WrapContents = $false
 $images.FlowDirection = 'LeftToRight'
 
+$selectedPreview = New-Object Windows.Forms.PictureBox
+$selectedPreview.Dock = 'Fill'
+$selectedPreview.SizeMode = 'Zoom'
+$selectedPreview.BackColor = [Drawing.Color]::Black
+$selectedPreview.BorderStyle = [Windows.Forms.BorderStyle]::FixedSingle
+
+$selectedPreviewCaption = New-Object Windows.Forms.Label
+$selectedPreviewCaption.Dock = 'Bottom'
+$selectedPreviewCaption.Height = 28
+$selectedPreviewCaption.Padding = New-Object Windows.Forms.Padding(8, 5, 8, 5)
+$selectedPreviewCaption.BackColor = [Drawing.Color]::WhiteSmoke
+
+$previewHost = New-Object Windows.Forms.Panel
+$previewHost.Dock = 'Fill'
+$previewHost.Controls.Add($selectedPreview)
+$previewHost.Controls.Add($selectedPreviewCaption)
+
 $right = New-Object Windows.Forms.TableLayoutPanel
 $right.Dock = 'Fill'
-$right.RowCount = 2
+$right.RowCount = 3
 $right.ColumnCount = 1
 $right.RowStyles.Add((New-Object Windows.Forms.RowStyle([Windows.Forms.SizeType]::Percent, 58)))
-$right.RowStyles.Add((New-Object Windows.Forms.RowStyle([Windows.Forms.SizeType]::Percent, 42)))
-$right.Controls.Add($images, 0, 0)
-$right.Controls.Add($details, 0, 1)
+$right.RowStyles.Add((New-Object Windows.Forms.RowStyle([Windows.Forms.SizeType]::Percent, 20)))
+$right.RowStyles.Add((New-Object Windows.Forms.RowStyle([Windows.Forms.SizeType]::Percent, 22)))
+$right.Controls.Add($previewHost, 0, 0)
+$right.Controls.Add($images, 0, 1)
+$right.Controls.Add($details, 0, 2)
 
 $content = New-Object Windows.Forms.TableLayoutPanel
 $content.Dock = 'Fill'
@@ -225,20 +299,45 @@ $content.Controls.Add($list, 0, 0)
 $content.Controls.Add($right, 1, 0)
 $form.Controls.Add($content)
 
-$buttons = New-Object Windows.Forms.FlowLayoutPanel
+$buttons = New-Object Windows.Forms.TableLayoutPanel
 $buttons.Dock = 'Bottom'
-$buttons.Height = 52
+$buttons.Height = 132
 $buttons.Padding = New-Object Windows.Forms.Padding(8)
-$buttons.WrapContents = $false
+$buttons.ColumnCount = 1
+$buttons.RowCount = 3
+$buttons.RowStyles.Add((New-Object Windows.Forms.RowStyle([Windows.Forms.SizeType]::Percent, 33)))
+$buttons.RowStyles.Add((New-Object Windows.Forms.RowStyle([Windows.Forms.SizeType]::Percent, 34)))
+$buttons.RowStyles.Add((New-Object Windows.Forms.RowStyle([Windows.Forms.SizeType]::Percent, 33)))
 $form.Controls.Add($buttons)
 
+function New-ReviewButtonArea {
+    param([string]$Label, [int]$Row)
+    $area = New-Object Windows.Forms.FlowLayoutPanel
+    $area.Dock = 'Fill'
+    $area.WrapContents = $false
+    $area.AutoScroll = $true
+    $area.FlowDirection = 'LeftToRight'
+    $heading = New-Object Windows.Forms.Label
+    $heading.Text = $Label
+    $heading.AutoSize = $true
+    $heading.Font = New-Object Drawing.Font('Segoe UI', 9, [Drawing.FontStyle]::Bold)
+    $heading.Padding = New-Object Windows.Forms.Padding(0, 7, 10, 0)
+    $area.Controls.Add($heading)
+    [void]$buttons.Controls.Add($area, 0, $Row)
+    return $area
+}
+
+$navigationButtons = New-ReviewButtonArea -Label 'Navigate:' -Row 0
+$decisionButtons = New-ReviewButtonArea -Label 'Decide:' -Row 1
+$utilityButtons = New-ReviewButtonArea -Label 'Utilities:' -Row 2
+
 function Add-ReviewButton {
-    param([string]$Text, [scriptblock]$Action)
+    param([string]$Text, [scriptblock]$Action, [Windows.Forms.FlowLayoutPanel]$ButtonArea = $decisionButtons)
     $button = New-Object Windows.Forms.Button
     $button.Text = $Text
     $button.AutoSize = $true
     $button.Add_Click($Action)
-    $buttons.Controls.Add($button)
+    [void]$ButtonArea.Controls.Add($button)
     return $button
 }
 
@@ -246,12 +345,37 @@ $script:currentIndex = 0
 $script:currentItemIndex = 0
 $script:isRefreshing = $false
 $script:decisionNotice = 'No decision recorded for this group.'
+$script:allGroups = @($groups)
+$script:showReviewed = $false
+$script:remainingGroupCount = $groups.Count
+Update-ReviewQueue
 function Get-CurrentGroup { if ($script:groups.Count -gt 0) { return $script:groups[$script:currentIndex] }; return $null }
 function Get-CurrentItem { $group = Get-CurrentGroup; if ($null -eq $group) { return $null }; $items = @($group.items); if ($items.Count -eq 0) { return $null }; return $items[[math]::Min($script:currentItemIndex, $items.Count - 1)] }
 function Set-SelectedItem {
     param([int]$Index)
     $script:currentItemIndex = $Index
-    if ($list.SelectedIndex -ne $Index) { $list.SelectedIndex = $Index } else { Refresh-Review }
+    Refresh-Review
+}
+
+function Get-DetachedPreviewImage {
+    param([string]$Path)
+
+    $source = [Drawing.Image]::FromFile($Path)
+    try {
+        return [Drawing.Bitmap]::new($source)
+    }
+    finally {
+        $source.Dispose()
+    }
+}
+
+function Clear-PreviewImage {
+    param([Windows.Forms.PictureBox]$PictureBox)
+
+    if ($null -ne $PictureBox.Image) {
+        $PictureBox.Image.Dispose()
+        $PictureBox.Image = $null
+    }
 }
 
 function Refresh-Review {
@@ -259,56 +383,79 @@ function Refresh-Review {
     try {
     $group = Get-CurrentGroup
     $list.Items.Clear()
+    foreach ($control in @($images.Controls)) {
+        foreach ($child in @($control.Controls)) {
+            if ($child -is [Windows.Forms.PictureBox]) { Clear-PreviewImage -PictureBox $child }
+            $child.Dispose()
+        }
+        $control.Dispose()
+    }
     $images.Controls.Clear()
+    Clear-PreviewImage -PictureBox $selectedPreview
     if ($null -eq $group) {
-        $header.Text = 'No review groups'
-        $details.Text = 'The classifier produced no groups.'
+        $header.Text = 'Review complete — close this window to continue'
+        $selectedPreviewCaption.Text = ''
+        $details.Text = 'All available groups have decisions. Click "Finish review" below to return to Qnap Photo Manager, then run the dry-run.'
         return
     }
-    if ($decisionMap.ContainsKey([string]$group.groupId)) {
-        $savedGroupDecision = $decisionMap[[string]$group.groupId]
+    $groupDecisionKey = "group:$($group.groupId)"
+    if ($decisionMap.ContainsKey($groupDecisionKey)) {
+        $savedGroupDecision = $decisionMap[$groupDecisionKey]
         $script:decisionNotice = switch ([string]$savedGroupDecision.action) {
             'defer' { "Deferred: $($group.groupId)"; break }
-            'keep' { "Keep recorded: $($savedGroupDecision.keepPath)"; break }
+            'keep' { "Keep recorded: $($savedGroupDecision.keepPath). $([math]::Max(0, @($group.items).Count - 1)) non-keeper(s) are queued for the remediation dry run."; break }
             'quarantine-requested' { "Quarantine requested: $($group.groupId)"; break }
             default { "Decision recorded: $($savedGroupDecision.action)"; break }
         }
     }
     else {
-        $script:decisionNotice = 'No decision recorded for this group.'
+        $itemDecisionCount = [int](($decisionMap.Values | Where-Object { [string](Get-ReviewValue -Object $_ -Name 'groupId') -eq [string]$group.groupId } | Measure-Object).Count)
+        $script:decisionNotice = if ($itemDecisionCount -gt 0) { "$itemDecisionCount item-level decision(s) recorded for this group." } else { 'No decision recorded for this group.' }
     }
     $previousButton.Enabled = ($script:currentIndex -gt 0)
     $nextButton.Enabled = ($script:currentIndex -lt $script:groups.Count - 1)
-    $header.Text = "Group $($currentIndex + 1) of $($groups.Count) | $($group.confidenceTier) | $($group.labels -join ', ')"
+    $reviewStatus = if ($script:showReviewed) { "showing all; $script:remainingGroupCount unreviewed" } else { "$script:remainingGroupCount unreviewed" }
+    $header.Text = "Group $($script:currentIndex + 1) of $($script:groups.Count) | $reviewStatus | $($group.confidenceTier) | $($group.labels -join ', ')"
     foreach ($item in @($group.items)) { [void]$list.Items.Add([string]$item.path) }
     $list.SelectedIndex = [math]::Min($currentItemIndex, [math]::Max(0, $list.Items.Count - 1))
     $selectedItem = Get-CurrentItem
+    $selectedPreviewCaption.Text = if ($null -ne $selectedItem) { "Selected item $($script:currentItemIndex + 1) of $(@($group.items).Count): $([IO.Path]::GetFileName($selectedItem.path))" } else { '' }
+    if ($null -ne $selectedItem) {
+        try {
+            if (Test-Path -LiteralPath $selectedItem.path) {
+                $selectedPreview.Image = Get-DetachedPreviewImage -Path $selectedItem.path
+            }
+        }
+        catch {
+            $selectedPreviewCaption.Text = "Preview unavailable: $($selectedItem.path)"
+        }
+    }
     $details.Text = "Decision: $script:decisionNotice`r`nSelected item: $($selectedItem.path)`r`nConfidence: $($group.confidenceTier)`r`nLabels: $($group.labels -join ', ')`r`nSuggested keep: $($group.suggestedKeepPath)`r`nReason: $($group.recommendationReason)`r`n`r`nExplanation/evidence:`r`n$(($group.explanation | ConvertTo-Json -Depth 20))`r`n`r`n" + (($group.items | ForEach-Object { $date = Get-DateProposal -Item $_; $proposed = if ($null -ne $date) { $date.proposedCaptureTimeUtc } else { 'n/a' }; $modified = if ($null -ne $_.modifiedTime) { $_.modifiedTime } else { 'n/a' }; $access = if ($_.accessState) { $_.accessState } else { 'available/unreported' }; $evidence = @(Get-ReviewValue -Object $_ -Name 'evidence'); "$($_.path)`r`n  Filename: $([IO.Path]::GetFileName($_.path))`r`n  Size: $($_.size)  Dimensions: $($_.width)x$($_.height)  Modified: $modified  Difference: $($_.perceptualDifference)`r`n  Proposed date: $proposed  Suggested keep: $($_.path -eq $group.suggestedKeepPath)  Protected: $(Test-ItemProtected $_)  Access: $access  Warning: $($_.warning)  Error: $($_.error)`r`n  Complete evidence: $($evidence | ConvertTo-Json -Depth 20 -Compress)" }) -join "`r`n`r`n")
     $itemIndex = 0
     foreach ($item in @($group.items)) {
         $capturedIndex = $itemIndex
         $panel = New-Object Windows.Forms.Panel
-        $panel.Width = 360
-        $panel.Height = 300
+        $panel.Width = 210
+        $panel.Height = 150
         $panel.BorderStyle = if ($capturedIndex -eq $script:currentItemIndex) { [Windows.Forms.BorderStyle]::Fixed3D } else { [Windows.Forms.BorderStyle]::None }
         $panel.BackColor = if ($capturedIndex -eq $script:currentItemIndex) { [Drawing.Color]::LightSteelBlue } else { [Drawing.Color]::White }
         $picture = New-Object Windows.Forms.PictureBox
-        $picture.Width = 350
-        $picture.Height = 250
+        $picture.Width = 200
+        $picture.Height = 105
         $picture.SizeMode = 'Zoom'
         $picture.Top = 0
         $picture.Left = 0
         $selectAction = { Set-SelectedItem -Index $capturedIndex }.GetNewClosure()
         try {
-            if (Test-Path -LiteralPath $item.path) { $picture.Image = [Drawing.Image]::FromFile($item.path) }
+            if (Test-Path -LiteralPath $item.path) { $picture.Image = Get-DetachedPreviewImage -Path $item.path }
             else { throw 'File is unavailable.' }
         }
         catch {
             $fallback = New-Object Windows.Forms.Label
             $fallback.Text = "Preview unavailable`r`n$($item.path)"
             $fallback.AutoSize = $false
-            $fallback.Width = 350
-            $fallback.Height = 250
+            $fallback.Width = 200
+            $fallback.Height = 105
             $fallback.TextAlign = 'MiddleCenter'
             $fallback.Add_Click($selectAction)
             $panel.Controls.Add($fallback)
@@ -316,9 +463,9 @@ function Refresh-Review {
         if ($null -ne $picture.Image) { $panel.Controls.Add($picture) }
         $caption = New-Object Windows.Forms.Label
         $caption.Text = [IO.Path]::GetFileName($item.path)
-        $caption.Top = 255
-        $caption.Width = 350
-        $caption.Height = 40
+        $caption.Top = 108
+        $caption.Width = 200
+        $caption.Height = 38
         $caption.BackColor = $panel.BackColor
         $caption.Font = if ($capturedIndex -eq $script:currentItemIndex) { New-Object Drawing.Font('Segoe UI', 9, [Drawing.FontStyle]::Bold) } else { New-Object Drawing.Font('Segoe UI', 9) }
         $panel.Controls.Add($caption)
@@ -336,8 +483,8 @@ function Refresh-Review {
 
 $list.Add_SelectedIndexChanged({ if (-not $script:isRefreshing) { $script:currentItemIndex = [math]::Max(0, $list.SelectedIndex); Refresh-Review } })
 
-$previousButton = Add-ReviewButton -Text 'Previous' -Action { if ($script:currentIndex -gt 0) { $script:currentIndex--; $script:currentItemIndex = 0; Refresh-Review } }
-$nextButton = Add-ReviewButton -Text 'Next' -Action { if ($script:currentIndex -lt $script:groups.Count - 1) { $script:currentIndex++; $script:currentItemIndex = 0; Refresh-Review } }
+$previousButton = Add-ReviewButton -Text 'Previous' -ButtonArea $navigationButtons -Action { if ($script:currentIndex -gt 0) { $script:currentIndex--; $script:currentItemIndex = 0; Refresh-Review } }
+$nextButton = Add-ReviewButton -Text 'Next' -ButtonArea $navigationButtons -Action { if ($script:currentIndex -lt $script:groups.Count - 1) { $script:currentIndex++; $script:currentItemIndex = 0; Refresh-Review } }
 Add-ReviewButton -Text 'Keep suggestion' -Action {
     $group = Get-CurrentGroup
     if ($null -ne $group) {
@@ -347,7 +494,8 @@ Add-ReviewButton -Text 'Keep suggestion' -Action {
             $suggestedIndex++
         }
         $script:currentItemIndex = [math]::Min($suggestedIndex, @($group.items).Count - 1)
-        $decisionMap[$group.groupId] = [pscustomobject]@{ groupId = $group.groupId; action = 'keep'; keepPath = $group.suggestedKeepPath; decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }
+        $decision = [pscustomobject]@{ groupId = $group.groupId; action = 'keep'; keepPath = $group.suggestedKeepPath; decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }
+        $decisionMap[(Get-ReviewDecisionKey -Decision $decision)] = $decision
         Save-Decisions $decisionMap
         $script:decisionNotice = "Keep suggestion recorded: $($group.suggestedKeepPath)"
         Refresh-Review
@@ -356,39 +504,53 @@ Add-ReviewButton -Text 'Keep suggestion' -Action {
 Add-ReviewButton -Text 'Choose selected keep' -Action {
     $group = Get-CurrentGroup
     $item = Get-CurrentItem
-    if ($null -ne $group -and $null -ne $item) { $decisionMap[$group.groupId] = [pscustomobject]@{ groupId = $group.groupId; action = 'keep'; keepPath = $item.path; decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }; Save-Decisions $decisionMap; $script:decisionNotice = "Selected keep recorded: $($item.path)"; Refresh-Review }
+    if ($null -ne $group -and $null -ne $item) { $decision = [pscustomobject]@{ groupId = $group.groupId; action = 'keep'; keepPath = $item.path; decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }; $decisionMap[(Get-ReviewDecisionKey -Decision $decision)] = $decision; Save-Decisions $decisionMap; $script:decisionNotice = "Selected keep recorded: $($item.path)"; Refresh-Review }
 } | Out-Null
 Add-ReviewButton -Text 'Queue quarantine' -Action {
     $group = Get-CurrentGroup
     if ($null -ne $group -and [Windows.Forms.MessageBox]::Show('Record a quarantine request for this group? No files will be moved in Phase 5.', 'Confirm request', 'YesNo', 'Warning') -eq 'Yes') {
-        $decisionMap[$group.groupId] = [pscustomobject]@{ groupId = $group.groupId; action = 'quarantine-requested'; keepPath = $group.suggestedKeepPath; decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }; Save-Decisions $decisionMap
+        foreach ($item in @($group.items | Where-Object { $_.path -ne $group.suggestedKeepPath })) {
+            $decision = [pscustomobject]@{ groupId = $group.groupId; path = $item.path; action = 'quarantine-requested'; sha256 = (Get-DecisionSha256 -Path $item.path); decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }
+            $decisionMap[(Get-ReviewDecisionKey -Decision $decision)] = $decision
+        }
+        Save-Decisions $decisionMap
+        Refresh-Review
     }
 } | Out-Null
 Add-ReviewButton -Text 'Queue selected quarantine' -Action {
     $group = Get-CurrentGroup
     $item = Get-CurrentItem
     if ($null -ne $group -and $null -ne $item -and [Windows.Forms.MessageBox]::Show('Record a quarantine request for the selected item? No files will be moved in Phase 5.', 'Confirm request', 'YesNo', 'Warning') -eq 'Yes') {
-        $decisionMap["$($group.groupId):$($item.path)"] = [pscustomobject]@{ groupId = $group.groupId; path = $item.path; action = 'quarantine-requested'; decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }; Save-Decisions $decisionMap
+        $decision = [pscustomobject]@{ groupId = $group.groupId; path = $item.path; action = 'quarantine-requested'; sha256 = (Get-DecisionSha256 -Path $item.path); decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }; $decisionMap[(Get-ReviewDecisionKey -Decision $decision)] = $decision; Save-Decisions $decisionMap; Refresh-Review
     }
 } | Out-Null
 Add-ReviewButton -Text 'Skip / defer' -Action {
     $group = Get-CurrentGroup
-    if ($null -ne $group) { $decisionMap[$group.groupId] = [pscustomobject]@{ groupId = $group.groupId; action = 'defer'; decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }; Save-Decisions $decisionMap; $script:decisionNotice = "Deferred: $($group.groupId)"; Refresh-Review }
+    if ($null -ne $group) { $decision = [pscustomobject]@{ groupId = $group.groupId; action = 'defer'; decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }; $decisionMap[(Get-ReviewDecisionKey -Decision $decision)] = $decision; Save-Decisions $decisionMap; $script:decisionNotice = "Deferred: $($group.groupId)"; Refresh-Review }
 } | Out-Null
 Add-ReviewButton -Text 'Protect selected' -Action {
+    $group = Get-CurrentGroup
     $item = Get-CurrentItem
-    if ($null -ne $item) {
+    if ($null -ne $group -and $null -ne $item) {
         $newProtected = -not (Test-ItemProtected $item)
         $script:protectedOverrides[[string]$item.path] = $newProtected
         $action = if ($newProtected) { 'protect' } else { 'unprotect' }
-        $decisionMap["$($item.path)"] = [pscustomobject]@{ path = $item.path; action = $action; protected = $newProtected; decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }
+        $decision = [pscustomobject]@{ groupId = $group.groupId; path = $item.path; action = $action; protected = $newProtected; decidedAtUtc = (Get-Date).ToUniversalTime().ToString('o') }
+        $decisionMap[(Get-ReviewDecisionKey -Decision $decision)] = $decision
         Save-Decisions $decisionMap
         $script:decisionNotice = "Protected: $newProtected for $($item.path)"
         Refresh-Review
     }
 } | Out-Null
-Add-ReviewButton -Text 'Open file' -Action { $item = Get-CurrentItem; if ($null -ne $item) { Start-Process -FilePath $item.path } } | Out-Null
-Add-ReviewButton -Text 'Open folder' -Action { $item = Get-CurrentItem; if ($null -ne $item) { Start-Process explorer.exe -ArgumentList "/select,`"$($item.path)`"" } } | Out-Null
+Add-ReviewButton -Text 'Open file' -ButtonArea $utilityButtons -Action { $item = Get-CurrentItem; if ($null -ne $item) { Start-Process -FilePath $item.path } } | Out-Null
+Add-ReviewButton -Text 'Open folder' -ButtonArea $utilityButtons -Action { $item = Get-CurrentItem; if ($null -ne $item) { Start-Process explorer.exe -ArgumentList "/select,`"$($item.path)`"" } } | Out-Null
+Add-ReviewButton -Text 'Finish review' -ButtonArea $utilityButtons -Action { $form.Close() } | Out-Null
+$showReviewedButton = Add-ReviewButton -Text 'Show reviewed groups' -ButtonArea $utilityButtons -Action {
+    $script:showReviewed = -not $script:showReviewed
+    $showReviewedButton.Text = if ($script:showReviewed) { 'Hide reviewed groups' } else { 'Show reviewed groups' }
+    Update-ReviewQueue
+    Refresh-Review
+}
 
 Refresh-Review
 [void]$form.ShowDialog()

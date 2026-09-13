@@ -22,7 +22,10 @@ param(
     [switch]$Apply,
 
     [Parameter()]
-    [switch]$Undo
+    [switch]$Undo,
+
+    [Parameter()]
+    [string[]]$UndoSourcePath
 )
 
 Set-StrictMode -Version Latest
@@ -80,7 +83,6 @@ function Get-RelativeDestination {
     }
     $destination = Join-Path $Quarantine $relative
     $parent = Split-Path -Path $destination -Parent
-    if (-not (Test-Path -LiteralPath $parent)) { New-Item -Path $parent -ItemType Directory -Force | Out-Null }
     if (Test-Path -LiteralPath $destination) {
         $stem = [IO.Path]::GetFileNameWithoutExtension($destination)
         $extension = [IO.Path]::GetExtension($destination)
@@ -106,11 +108,28 @@ if (-not (Test-Path -LiteralPath $DecisionPath)) { throw "Decision file not foun
 $config = if (Test-Path -LiteralPath $ConfigPath) { Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json } else { $null }
 $protectedPaths = if ($null -ne $config) { @($config.scan.protectedPaths) } else { @() }
 $excludedPaths = if ($null -ne $config) { @($config.scan.excludedPaths) } else { @() }
-$decisions = @(Get-Content -LiteralPath $DecisionPath -Raw | ConvertFrom-Json)
+$decisions = @((Get-Content -LiteralPath $DecisionPath -Raw | ConvertFrom-Json) | Write-Output)
 
 if ($Undo) {
     if (-not (Test-Path -LiteralPath $TransactionManifestPath)) { throw "Transaction manifest not found: $TransactionManifestPath" }
-    $entries = @(Get-Content -LiteralPath $TransactionManifestPath | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.status -eq 'moved' })
+    $history = @(Get-Content -LiteralPath $TransactionManifestPath | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json })
+    $undone = @{}
+    foreach ($entry in @($history | Where-Object { $_.status -eq 'undone' })) {
+        $undone["$($entry.source)|$($entry.destination)"] = $true
+    }
+    $entries = @($history | Where-Object {
+        $_.status -eq 'moved' -and -not $undone.ContainsKey("$($_.source)|$($_.destination)")
+    })
+    $alreadyUndoneCount = @($history | Where-Object { $_.status -eq 'moved' -and $undone.ContainsKey("$($_.source)|$($_.destination)") }).Count
+    if ($UndoSourcePath) {
+        $requested = @{}
+        foreach ($path in $UndoSourcePath) { $requested[[IO.Path]::GetFullPath($path)] = $true }
+        $entries = @($entries | Where-Object { $requested.ContainsKey([IO.Path]::GetFullPath([string]$_.source)) })
+    }
+    if ($entries.Count -eq 0) {
+        Write-Host "No active quarantine transaction(s) matched the undo request. Previously restored: $alreadyUndoneCount."
+        return [pscustomobject]@{ undoneCount = 0; alreadyUndoneCount = $alreadyUndoneCount }
+    }
     foreach ($entry in ($entries | Sort-Object transactionUtc -Descending)) {
         if (-not (Test-Path -LiteralPath $entry.destination)) { throw "Undo refused; quarantine file is missing: $($entry.destination)" }
         if (Test-Path -LiteralPath $entry.source) { throw "Undo refused; source already exists: $($entry.source)" }
@@ -125,8 +144,8 @@ if ($Undo) {
         Move-Item -LiteralPath $entry.destination -Destination $entry.source
         Add-Transaction ([ordered]@{ status = 'undone'; source = $entry.source; destination = $entry.destination; transactionUtc = (Get-Date).ToUniversalTime().ToString('o') })
     }
-    Write-Host "Undo completed for $($entries.Count) transaction(s)."
-    return
+    Write-Host "Undo completed for $($entries.Count) transaction(s). Previously restored entries skipped: $alreadyUndoneCount."
+    return [pscustomobject]@{ undoneCount = $entries.Count; alreadyUndoneCount = $alreadyUndoneCount }
 }
 
 if ([string]::IsNullOrWhiteSpace($InputPath)) { throw '-InputPath is required unless -Undo is specified.' }
@@ -141,13 +160,25 @@ foreach ($group in @($classified.groups)) {
     foreach ($item in @($group.items)) {
         $itemsByPath[[string]$item.path] = $item
     }
-    $groupDecision = @($decisions | Where-Object { (Get-Value $_ 'groupId') -eq $group.groupId }) | Select-Object -Last 1
+    $groupDecision = @($decisions | Where-Object {
+        (Get-Value $_ 'groupId') -eq $group.groupId -and
+        [string]::IsNullOrWhiteSpace([string](Get-Value $_ 'path'))
+    }) | Select-Object -Last 1
     if ($null -ne $groupDecision -and $groupDecision.action -eq 'quarantine-requested') {
+        foreach ($item in @($group.items) | Where-Object { $_.path -ne $keepPath }) { $item | Add-Member -NotePropertyName requested -NotePropertyValue $true -Force }
+    }
+    elseif ($null -ne $groupDecision -and $groupDecision.action -eq 'keep') {
+        $keepPath = [string](Get-Value $groupDecision 'keepPath')
+        if ([string]::IsNullOrWhiteSpace($keepPath)) { throw "Keep decision for group '$($group.groupId)' has no keepPath." }
         foreach ($item in @($group.items) | Where-Object { $_.path -ne $keepPath }) { $item | Add-Member -NotePropertyName requested -NotePropertyValue $true -Force }
     }
 }
 foreach ($decision in $decisions | Where-Object { (Get-Value $_ 'action') -eq 'quarantine-requested' -and (Get-Value $_ 'path') }) {
-    if ($itemsByPath.ContainsKey([string]$decision.path)) { $itemsByPath[[string]$decision.path] | Add-Member -NotePropertyName requested -NotePropertyValue $true -Force }
+    if ($itemsByPath.ContainsKey([string]$decision.path)) {
+        $item = $itemsByPath[[string]$decision.path]
+        $item | Add-Member -NotePropertyName requested -NotePropertyValue $true -Force
+        $item | Add-Member -NotePropertyName requestedSha256 -NotePropertyValue (Get-Value $decision 'sha256') -Force
+    }
 }
 
 $results = @()
@@ -161,7 +192,7 @@ foreach ($path in @($itemsByPath.Keys | Sort-Object)) {
     }
     if (-not (Test-Path -LiteralPath $path)) { $results += [ordered]@{ source = $path; status = 'failed'; reason = 'source-missing' }; continue }
     $source = Get-Item -LiteralPath $path -Force
-    $expectedHash = Get-ComparableHash -Value (Get-Value $item 'hash')
+    $expectedHash = Get-ComparableHash -Value (Get-Value $item 'requestedSha256')
     $sourceHash = $null
     if ($null -ne $expectedHash) {
         $sourceHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -186,6 +217,10 @@ foreach ($path in @($itemsByPath.Keys | Sort-Object)) {
     }
     if ($Apply) {
         try {
+            $destinationParent = Split-Path -Path $destination -Parent
+            if (-not (Test-Path -LiteralPath $destinationParent)) {
+                New-Item -Path $destinationParent -ItemType Directory -Force | Out-Null
+            }
             Move-Item -LiteralPath $path -Destination $destination -ErrorAction Stop
             $moved = Get-Item -LiteralPath $destination -Force
             $entry.postMove = Get-FileEvidence -File $moved

@@ -35,13 +35,17 @@ param(
     [string]$UndoManifestPath = '.\reports\dates\date-undo.jsonl',
 
     [Parameter()]
+    [string]$VerificationReportPath = '.\reports\dates\date-verification.json',
+
+    [Parameter()]
     [datetime]$FutureToleranceUtc = (Get-Date).ToUniversalTime().AddDays(1)
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$script:TimezonePolicy = 'Naive capture timestamps are treated as unspecified local time. Explicit offsets and Zulu timestamps are converted to UTC. Mixed timezone kinds or disagreeing UTC instants are conflicts. Impossible and ambiguous dates are rejected. Filesystem CreationTime and LastWriteTime are transfer evidence only.'
+$script:EvidenceToleranceSeconds = 59
+$script:TimezonePolicy = 'Naive capture timestamps are treated as unspecified local time. Explicit offsets and Zulu timestamps are converted to UTC. Capture evidence within 59 seconds is treated as equivalent; otherwise, disagreeing UTC instants are conflicts. Impossible and ambiguous dates are rejected. Filesystem CreationTime and LastWriteTime are transfer evidence only.'
 
 function Get-PropertyValue {
     param(
@@ -63,6 +67,33 @@ function Test-FileTimeMatch {
 
     $expectedDate = if ($Expected -is [datetime]) { ([datetime]$Expected).ToUniversalTime() } else { [datetime]::Parse([string]$Expected).ToUniversalTime() }
     return [math]::Abs(($Actual.ToUniversalTime() - $expectedDate).TotalSeconds) -le 1
+}
+
+function Get-DateRepairEvidence {
+    param([System.IO.FileInfo]$File)
+
+    $decodeStatus = 'not-applicable'
+    $decodeError = $null
+    if ($File.Extension.ToLowerInvariant() -in @('.jpg', '.jpeg', '.tif', '.tiff', '.png', '.gif', '.bmp')) {
+        try {
+            Add-Type -AssemblyName System.Drawing -ErrorAction Stop
+            $image = [Drawing.Image]::FromFile($File.FullName)
+            $image.Dispose()
+            $decodeStatus = 'renderable'
+        }
+        catch {
+            $decodeStatus = 'unrenderable'
+            $decodeError = $_.Exception.Message
+        }
+    }
+    [ordered]@{
+        size = [long]$File.Length
+        sha256 = (Get-FileHash -LiteralPath $File.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        creationTimeUtc = $File.CreationTimeUtc.ToString('o')
+        lastWriteTimeUtc = $File.LastWriteTimeUtc.ToString('o')
+        decodeStatus = $decodeStatus
+        decodeError = $decodeError
+    }
 }
 
 function Test-CalendarDate {
@@ -357,8 +388,9 @@ function Get-FileDateReview {
     }
     elseif ($validEvidence.Count -gt 0) {
         $selected = $validEvidence | Sort-Object @{ Expression = { Get-EvidenceRank -Source $_.Source } } | Select-Object -First 1
-        $conflicting = @($validEvidence | Where-Object { $_.Date.UtcDateTime -ne $selected.Date.UtcDateTime })
-        $timezoneKinds = @($validEvidence | ForEach-Object { $_.TimezoneKind } | Select-Object -Unique)
+        $conflicting = @($validEvidence | Where-Object {
+            [math]::Abs(($_.Date.UtcDateTime - $selected.Date.UtcDateTime).TotalSeconds) -gt $script:EvidenceToleranceSeconds
+        })
         $proposedDate = $selected.Date
         $source = $selected.Source
         $rawValue = $selected.RawValue
@@ -369,10 +401,6 @@ function Get-FileDateReview {
         if ($conflicting.Count -gt 0) {
             $status = 'Conflict'
             $reason = 'Multiple date sources disagree; no automatic change is allowed.'
-        }
-        elseif ($timezoneKinds.Count -gt 1 -and $timezoneKinds -contains 'explicit-offset' -and $timezoneKinds -contains 'unspecified-local') {
-            $status = 'Conflict'
-            $reason = 'Timezone kinds disagree (explicit offset vs naive local); no automatic change is allowed.'
         }
         elseif ($proposedDate.UtcDateTime -gt $FutureToleranceUtc.ToUniversalTime()) {
             $status = 'FutureDate'
@@ -444,7 +472,8 @@ if ($Undo) {
     return
 }
 
-if (@($Path).Count -eq 0 -and [string]::IsNullOrWhiteSpace($ReviewPath)) {
+$inputPathCount = if ($null -eq $Path) { 0 } else { $Path.Count }
+if ($inputPathCount -eq 0 -and [string]::IsNullOrWhiteSpace($ReviewPath)) {
     throw 'At least one input path or -ReviewPath is required unless -Undo is specified.'
 }
 
@@ -534,6 +563,7 @@ if ($outputDirectory -and -not (Test-Path -LiteralPath $outputDirectory)) {
 $report | ConvertTo-Json -Depth 10 | Set-Content -Path $OutputPath -Encoding UTF8
 
 if ($Apply) {
+    $verificationItems = @()
     $manifestDirectory = Split-Path -Path $resolvedManifestPath -Parent
     if ($manifestDirectory -and -not (Test-Path -LiteralPath $manifestDirectory)) {
         New-Item -Path $manifestDirectory -ItemType Directory -Force | Out-Null
@@ -553,6 +583,7 @@ if ($Apply) {
         }
         $beforeCreationTimeUtc = $current.CreationTimeUtc.ToString('o')
         $beforeLastWriteTimeUtc = $current.LastWriteTimeUtc.ToString('o')
+        $preEvidence = Get-DateRepairEvidence -File $current
         $current.CreationTimeUtc = [datetime]$review.proposedCaptureTimeUtc
         if ($Policy -eq 'CreationAndLastWriteTime') {
             $current.LastWriteTimeUtc = [datetime]$review.proposedCaptureTimeUtc
@@ -565,14 +596,26 @@ if ($Apply) {
             afterLastWriteTimeUtc = $current.LastWriteTimeUtc.ToString('o')
             appliedAtUtc = (Get-Date).ToUniversalTime().ToString('o')
             policy = $Policy
+            preEvidence = $preEvidence
         }
+        $postEvidence = Get-DateRepairEvidence -File (Get-Item -LiteralPath $review.path -Force)
+        $verified = $preEvidence.size -eq $postEvidence.size -and $preEvidence.sha256 -eq $postEvidence.sha256 -and
+            $preEvidence.lastWriteTimeUtc -eq $postEvidence.lastWriteTimeUtc -and $preEvidence.decodeStatus -eq $postEvidence.decodeStatus
+        $manifestEntry.postEvidence = $postEvidence
+        $manifestEntry.verificationPassed = $verified
         ($manifestEntry | ConvertTo-Json -Compress) | Add-Content -Path $resolvedManifestPath -Encoding UTF8
+        $verificationItems += [pscustomobject]@{ path = $review.path; passed = $verified; preEvidence = $preEvidence; postEvidence = $postEvidence }
+        if (-not $verified) { throw "Date repair verification failed: $($review.path)" }
     }
+    $verificationDirectory = Split-Path -Path $VerificationReportPath -Parent
+    if ($verificationDirectory -and -not (Test-Path -LiteralPath $verificationDirectory)) { New-Item -Path $verificationDirectory -ItemType Directory -Force | Out-Null }
+    [pscustomobject]@{ generatedAtUtc = (Get-Date).ToUniversalTime().ToString('o'); passed = (@($verificationItems | Where-Object { -not $_.passed }).Count -eq 0); items = $verificationItems } | ConvertTo-Json -Depth 10 | Set-Content -Path $VerificationReportPath -Encoding UTF8
 }
 
+$proposedCount = [int](($reviews | Where-Object { $_.status -eq 'Proposed' } | Measure-Object).Count)
 [pscustomobject]@{
     outputPath = (Resolve-Path -LiteralPath $OutputPath).Path
-    itemCount = $reviews.Count
-    proposedCount = @($reviews | Where-Object status -eq 'Proposed').Count
+    itemCount = @($reviews).Count
+    proposedCount = $proposedCount
     applied = $Apply.IsPresent
 }
