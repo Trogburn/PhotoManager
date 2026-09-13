@@ -43,6 +43,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'common-hash.ps1')
 
 $script:EvidenceToleranceSeconds = 59
 $script:TimezonePolicy = 'Naive capture timestamps are treated as unspecified local time. Explicit offsets and Zulu timestamps are converted to UTC. Capture evidence within 59 seconds is treated as equivalent; otherwise, disagreeing UTC instants are conflicts. Impossible and ambiguous dates are rejected. Filesystem CreationTime and LastWriteTime are transfer evidence only.'
@@ -118,7 +119,7 @@ function Get-DateRepairEvidence {
     }
     [ordered]@{
         size = [long]$File.Length
-        sha256 = (Get-FileHash -LiteralPath $File.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        sha256 = Get-Sha256Hex -LiteralPath $File.FullName
         creationTimeUtc = $File.CreationTimeUtc.ToString('o')
         lastWriteTimeUtc = $File.LastWriteTimeUtc.ToString('o')
         decodeStatus = $decodeStatus

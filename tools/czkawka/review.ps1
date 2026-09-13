@@ -16,6 +16,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'common-hash.ps1')
 
 if (-not (Test-Path -LiteralPath $InputPath)) {
     throw "Classified result file not found: $InputPath"
@@ -68,7 +69,7 @@ function Get-DecisionSha256 {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
         throw "Cannot queue a missing file for quarantine: $Path"
     }
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+    return Get-Sha256Hex -LiteralPath $Path
 }
 
 function Get-DateProposal {

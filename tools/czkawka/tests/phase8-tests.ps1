@@ -98,8 +98,21 @@ try {
     Assert-Path (Join-Path $verifyOutput 'verification.json') 'Successful verification report'
     if (-not $verified.passed) { throw 'Successful remediation verification reported failure.' }
 
+    & $remediate -DecisionPath $decisionsPath -TransactionManifestPath $manifestPath -Undo -UndoSourcePath $candidate
+    $verifiedAfterUndo = & $verify -InputPath $classifiedPath -DecisionPath $decisionsPath `
+        -TransactionManifestPath $manifestPath -ScanRoot $fixtureRoot -QuarantineRoot $quarantineRoot `
+        -ConfigPath $configPath -OutputDirectory (Join-Path $tempRoot 'verification-after-undo') -AllowLocalRoot
+    if (-not $verifiedAfterUndo.passed) { throw 'Verification after selective undo reported failure.' }
+    $reapply = & $remediate -InputPath $classifiedPath -DecisionPath $decisionsPath -ConfigPath $configPath `
+        -ScanRoot $fixtureRoot -QuarantineRoot $quarantineRoot -TransactionManifestPath $manifestPath -Apply
+    if ($reapply.moved -ne 1) { throw 'Re-apply after selective undo did not quarantine the candidate again.' }
+    $verifiedAfterReapply = & $verify -InputPath $classifiedPath -DecisionPath $decisionsPath `
+        -TransactionManifestPath $manifestPath -ScanRoot $fixtureRoot -QuarantineRoot $quarantineRoot `
+        -ConfigPath $configPath -OutputDirectory (Join-Path $tempRoot 'verification-after-reapply') -AllowLocalRoot
+    if (-not $verifiedAfterReapply.passed) { throw 'Verification after re-quarantine reported failure.' }
+
     # Tampering must invalidate the recorded post-move evidence and fail closed.
-    $destination = @($apply.results | Where-Object status -eq 'moved')[0].destination
+    $destination = @($reapply.results | Where-Object status -eq 'moved')[0].destination
     Add-Content -LiteralPath $destination -Value 'tampered'
     Assert-Fails {
         & $verify -InputPath $classifiedPath -DecisionPath $decisionsPath `

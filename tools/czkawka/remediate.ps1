@@ -13,7 +13,7 @@ param(
     [string]$ScanRoot,
 
     [Parameter()]
-    [string]$ConfigPath = (Join-Path $PSScriptRoot 'config.json'),
+    [string]$ConfigPath,
 
     [Parameter()]
     [string]$TransactionManifestPath = '.\reports\quarantine\transactions.jsonl',
@@ -25,11 +25,18 @@ param(
     [switch]$Undo,
 
     [Parameter()]
-    [string[]]$UndoSourcePath
+    [string[]]$UndoSourcePath,
+
+    [Parameter()]
+    [string]$UndoSourcePathFile
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
+    $ConfigPath = Join-Path $PSScriptRoot 'config.json'
+}
+. (Join-Path $PSScriptRoot 'common-hash.ps1')
 
 function Get-Value {
     param([object]$Value, [string]$Name)
@@ -62,7 +69,7 @@ function Get-ComparableHash {
 
 function Get-FileEvidence {
     param([System.IO.FileInfo]$File)
-    $hash = (Get-FileHash -LiteralPath $File.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = Get-Sha256Hex -LiteralPath $File.FullName
     return [ordered]@{
         path = $File.FullName
         size = [long]$File.Length
@@ -86,7 +93,7 @@ function Get-RelativeDestination {
     if (Test-Path -LiteralPath $destination) {
         $stem = [IO.Path]::GetFileNameWithoutExtension($destination)
         $extension = [IO.Path]::GetExtension($destination)
-        $suffix = (Get-FileHash -LiteralPath $SourcePath -Algorithm SHA256).Hash.Substring(0, 12).ToLowerInvariant()
+        $suffix = (Get-Sha256Hex -LiteralPath $SourcePath).Substring(0, 12)
         $destination = Join-Path $parent "$stem.quarantine-$suffix$extension"
         $counter = 1
         while (Test-Path -LiteralPath $destination) {
@@ -121,9 +128,25 @@ if ($Undo) {
         $_.status -eq 'moved' -and -not $undone.ContainsKey("$($_.source)|$($_.destination)")
     })
     $alreadyUndoneCount = @($history | Where-Object { $_.status -eq 'moved' -and $undone.ContainsKey("$($_.source)|$($_.destination)") }).Count
-    if ($UndoSourcePath) {
+    $requestedPaths = New-Object System.Collections.Generic.List[string]
+    foreach ($path in @($UndoSourcePath)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$path)) {
+            $requestedPaths.Add([string]$path)
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($UndoSourcePathFile)) {
+        if (-not (Test-Path -LiteralPath $UndoSourcePathFile)) {
+            throw "Undo path list not found: $UndoSourcePathFile"
+        }
+        foreach ($path in Get-Content -LiteralPath $UndoSourcePathFile) {
+            if (-not [string]::IsNullOrWhiteSpace($path)) {
+                $requestedPaths.Add($path.Trim())
+            }
+        }
+    }
+    if ($requestedPaths.Count -gt 0) {
         $requested = @{}
-        foreach ($path in $UndoSourcePath) { $requested[[IO.Path]::GetFullPath($path)] = $true }
+        foreach ($path in $requestedPaths) { $requested[[IO.Path]::GetFullPath($path)] = $true }
         $entries = @($entries | Where-Object { $requested.ContainsKey([IO.Path]::GetFullPath([string]$_.source)) })
     }
     if ($entries.Count -eq 0) {
@@ -134,7 +157,7 @@ if ($Undo) {
         if (-not (Test-Path -LiteralPath $entry.destination)) { throw "Undo refused; quarantine file is missing: $($entry.destination)" }
         if (Test-Path -LiteralPath $entry.source) { throw "Undo refused; source already exists: $($entry.source)" }
         $current = Get-Item -LiteralPath $entry.destination -Force
-        $currentHash = (Get-FileHash -LiteralPath $entry.destination -Algorithm SHA256).Hash.ToLowerInvariant()
+        $currentHash = Get-Sha256Hex -LiteralPath $entry.destination
         if ($current.Length -ne [long]$entry.postMove.size -or -not (Test-TimeMatch $current.LastWriteTimeUtc $entry.postMove.lastWriteTimeUtc) -or
             $currentHash -ne $entry.postMove.sha256) { throw "Undo refused; quarantine file changed: $($entry.destination)" }
     }
@@ -142,10 +165,29 @@ if ($Undo) {
         $sourceParent = Split-Path -Path $entry.source -Parent
         if (-not (Test-Path -LiteralPath $sourceParent)) { New-Item -Path $sourceParent -ItemType Directory -Force | Out-Null }
         Move-Item -LiteralPath $entry.destination -Destination $entry.source
-        Add-Transaction ([ordered]@{ status = 'undone'; source = $entry.source; destination = $entry.destination; transactionUtc = (Get-Date).ToUniversalTime().ToString('o') })
+        if (Test-Path -LiteralPath $entry.destination) {
+            throw "Undo verification failed; quarantine path still exists: $($entry.destination)"
+        }
+        if (-not (Test-Path -LiteralPath $entry.source)) {
+            throw "Undo verification failed; restored file is missing: $($entry.source)"
+        }
+        $restored = Get-Item -LiteralPath $entry.source -Force
+        $restoredHash = Get-Sha256Hex -LiteralPath $entry.source
+        $expected = $entry.preMove
+        if ($null -eq $expected -or $restored.Length -ne [long]$expected.size -or $restoredHash -ne [string]$expected.sha256) {
+            throw "Undo verification failed; restored file does not match pre-move evidence: $($entry.source)"
+        }
+        Add-Transaction ([ordered]@{
+            status = 'undone'
+            source = $entry.source
+            destination = $entry.destination
+            transactionUtc = (Get-Date).ToUniversalTime().ToString('o')
+            verificationPassed = $true
+            restored = Get-FileEvidence -File $restored
+        })
     }
     Write-Host "Undo completed for $($entries.Count) transaction(s). Previously restored entries skipped: $alreadyUndoneCount."
-    return [pscustomobject]@{ undoneCount = $entries.Count; alreadyUndoneCount = $alreadyUndoneCount }
+    return [pscustomobject]@{ undoneCount = $entries.Count; alreadyUndoneCount = $alreadyUndoneCount; verificationPassed = $true }
 }
 
 if ([string]::IsNullOrWhiteSpace($InputPath)) { throw '-InputPath is required unless -Undo is specified.' }
@@ -195,7 +237,7 @@ foreach ($path in @($itemsByPath.Keys | Sort-Object)) {
     $expectedHash = Get-ComparableHash -Value (Get-Value $item 'requestedSha256')
     $sourceHash = $null
     if ($null -ne $expectedHash) {
-        $sourceHash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+        $sourceHash = Get-Sha256Hex -LiteralPath $path
     }
     if ($source.Length -ne [long](Get-Value $item 'size') -or -not (Test-TimeMatch $source.LastWriteTimeUtc (Get-Value $item 'modifiedTime')) -or
         ($null -ne $expectedHash -and $sourceHash -ne $expectedHash)) {
