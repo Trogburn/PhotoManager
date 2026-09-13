@@ -219,6 +219,9 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
     internal void ReturnToDateWorkForTests() =>
         DateWork.ReturnToDateWorkForTests();
 
+    internal void MarkDateScanInProgressForTests() =>
+        DateWork.MarkDateScanInProgressForTests();
+
     internal void PrepareFinishedDuplicateSessionForTests()
     {
         _workflow.TransitionTo(Models.WorkflowState.Configured);

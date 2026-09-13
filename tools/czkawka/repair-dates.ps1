@@ -45,8 +45,8 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common-hash.ps1')
 
-$script:EvidenceToleranceSeconds = 59
-$script:TimezonePolicy = 'Naive capture timestamps are treated as unspecified local time. Explicit offsets and Zulu timestamps are converted to UTC. Capture evidence within 59 seconds is treated as equivalent; otherwise, disagreeing UTC instants are conflicts. Impossible and ambiguous dates are rejected. Filesystem CreationTime and LastWriteTime are transfer evidence only.'
+$script:EvidenceToleranceSeconds = 86400
+$script:TimezonePolicy = 'Naive capture timestamps are treated as unspecified local time, except when a single explicit EXIF offset is present: then a naive filename or folder clock is interpreted in that offset. Pixel-style filenames are often UTC while EXIF is local, and photos may be taken in more than one time zone, so capture evidence within 24 hours is treated as the same event. The higher-ranked source (EXIF, then filename, then folder) supplies the proposed instant. Disagreeing instants more than 24 hours apart are conflicts. Impossible and ambiguous dates are rejected. Filesystem CreationTime and LastWriteTime are transfer evidence only.'
 
 function Get-PropertyValue {
     param(
@@ -392,14 +392,57 @@ function New-EvidenceComparisonRow {
     }
 }
 
-function Get-EvidenceUtc {
-    param($Evidence)
+function Convert-OffsetTextToTimeSpan {
+    param([string]$Offset)
+    if ([string]::IsNullOrWhiteSpace($Offset)) { return $null }
+    if ($Offset -notmatch '^(?<sign>[+-])(?<hours>\d{2}):(?<minutes>\d{2})$') { return $null }
+    $sign = if ($Matches.sign -eq '-') { -1 } else { 1 }
+    return [timespan]::FromMinutes($sign * (([int]$Matches.hours * 60) + [int]$Matches.minutes))
+}
 
+function Get-SharedExplicitCaptureOffset {
+    param($Evidence)
+    $offsets = @(
+        $Evidence |
+            Where-Object { $_.TimezoneKind -eq 'explicit-offset' -and -not [string]::IsNullOrWhiteSpace([string]$_.Offset) } |
+            ForEach-Object { [string]$_.Offset } |
+            Sort-Object -Unique
+    )
+    if ($offsets.Count -eq 1) { return $offsets[0] }
+    return $null
+}
+
+function Get-ComparableEvidenceUtc {
+    param(
+        $Evidence,
+        [string]$AnchorOffset
+    )
     if ($null -eq $Evidence -or $null -eq $Evidence.Date) {
         return $null
     }
+    if ($Evidence.TimezoneKind -eq 'unspecified-local' -and -not [string]::IsNullOrWhiteSpace($AnchorOffset)) {
+        $span = Convert-OffsetTextToTimeSpan -Offset $AnchorOffset
+        if ($null -ne $span) {
+            $wall = $Evidence.Date.DateTime
+            return ([datetimeoffset]::new(
+                [datetime]::new($wall.Year, $wall.Month, $wall.Day, $wall.Hour, $wall.Minute, $wall.Second, [DateTimeKind]::Unspecified),
+                $span)).UtcDateTime
+        }
+    }
+    return $Evidence.Date.UtcDateTime
+}
 
-    return $Evidence.Date.UtcDateTime.ToString('o')
+function Get-EvidenceUtc {
+    param(
+        $Evidence,
+        [string]$AnchorOffset
+    )
+
+    $utc = Get-ComparableEvidenceUtc -Evidence $Evidence -AnchorOffset $AnchorOffset
+    if ($null -eq $utc) {
+        return $null
+    }
+    return $utc.ToString('o')
 }
 
 function Get-EvidenceComparisonRows {
@@ -411,13 +454,14 @@ function Get-EvidenceComparisonRows {
     )
 
     $rows = [System.Collections.Generic.List[object]]::new()
+    $anchorOffset = Get-SharedExplicitCaptureOffset -Evidence $Evidence
     $exifItems = @($Evidence | Where-Object { $_.Source -like 'exif*' })
     $exifDated = $exifItems | Where-Object { $null -ne $_.Date } | Select-Object -First 1
     $filename = $Evidence | Where-Object { $_.Source -eq 'filename' } | Select-Object -First 1
     $folder = $Evidence | Where-Object { $_.Source -eq 'folder' } | Select-Object -First 1
 
     if ($null -ne $exifDated) {
-        [void]$rows.Add((New-EvidenceComparisonRow -Label 'EXIF' -State 'Has date' -Detail (Convert-EvidenceDateText $exifDated) -Selected ($SelectedSource -like 'exif*') -Utc (Get-EvidenceUtc $exifDated)))
+        [void]$rows.Add((New-EvidenceComparisonRow -Label 'EXIF' -State 'Has date' -Detail (Convert-EvidenceDateText $exifDated) -Selected ($SelectedSource -like 'exif*') -Utc (Get-EvidenceUtc $exifDated $anchorOffset)))
     }
     elseif (@($exifItems | Where-Object { $_.Source -eq 'exif' -and -not [string]::IsNullOrWhiteSpace([string]$_.Error) }).Count -gt 0) {
         $err = $exifItems | Where-Object { $_.Source -eq 'exif' } | Select-Object -First 1
@@ -428,7 +472,7 @@ function Get-EvidenceComparisonRows {
     }
 
     if ($null -ne $filename -and $null -ne $filename.Date) {
-        [void]$rows.Add((New-EvidenceComparisonRow -Label 'Filename' -State 'Has date' -Detail (Convert-EvidenceDateText $filename) -Selected ($SelectedSource -eq 'filename') -Utc (Get-EvidenceUtc $filename)))
+        [void]$rows.Add((New-EvidenceComparisonRow -Label 'Filename' -State 'Has date' -Detail (Convert-EvidenceDateText $filename) -Selected ($SelectedSource -eq 'filename') -Utc (Get-EvidenceUtc $filename $anchorOffset)))
     }
     elseif ($null -ne $filename -and -not [string]::IsNullOrWhiteSpace([string]$filename.Error)) {
         [void]$rows.Add((New-EvidenceComparisonRow -Label 'Filename' -State 'Invalid' -Detail ([string]$filename.Error) -Selected $false))
@@ -439,7 +483,7 @@ function Get-EvidenceComparisonRows {
 
     if ($null -ne $folder) {
         if ($null -ne $folder.Date) {
-            [void]$rows.Add((New-EvidenceComparisonRow -Label 'Folder' -State 'Has date' -Detail (Convert-EvidenceDateText $folder) -Selected ($SelectedSource -eq 'folder') -Utc (Get-EvidenceUtc $folder)))
+            [void]$rows.Add((New-EvidenceComparisonRow -Label 'Folder' -State 'Has date' -Detail (Convert-EvidenceDateText $folder) -Selected ($SelectedSource -eq 'folder') -Utc (Get-EvidenceUtc $folder $anchorOffset)))
         }
         else {
             [void]$rows.Add((New-EvidenceComparisonRow -Label 'Folder' -State 'Invalid' -Detail ([string]$folder.Error) -Selected $false))
@@ -563,8 +607,11 @@ function Get-FileDateReview {
     }
     elseif ($validEvidence.Count -gt 0) {
         $selected = $validEvidence | Sort-Object @{ Expression = { Get-EvidenceRank -Source $_.Source } } | Select-Object -First 1
+        $anchorOffset = Get-SharedExplicitCaptureOffset -Evidence $validEvidence
+        $selectedUtc = Get-ComparableEvidenceUtc -Evidence $selected -AnchorOffset $anchorOffset
         $conflicting = @($validEvidence | Where-Object {
-            [math]::Abs(($_.Date.UtcDateTime - $selected.Date.UtcDateTime).TotalSeconds) -gt $script:EvidenceToleranceSeconds
+            $candidateUtc = Get-ComparableEvidenceUtc -Evidence $_ -AnchorOffset $anchorOffset
+            [math]::Abs(($candidateUtc - $selectedUtc).TotalSeconds) -gt $script:EvidenceToleranceSeconds
         })
         $proposedDate = $selected.Date
         $source = $selected.Source

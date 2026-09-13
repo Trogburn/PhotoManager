@@ -24,6 +24,7 @@ public sealed class DateWorkflowViewModel : ObservableObject
     private string _datePreviewMessage = string.Empty;
     private bool _dateApplyCompleted;
     private bool _dateWorkStarted;
+    private bool _dateScanInProgress;
     private int _sampleCount = 25;
 
     internal DateWorkflowViewModel(DateRepairService dateRepair, IShellWorkflowHost host)
@@ -119,6 +120,7 @@ public sealed class DateWorkflowViewModel : ObservableObject
         DateSnapshotConfirmed = false;
         _dateApplyCompleted = false;
         _dateWorkStarted = false;
+        _dateScanInProgress = false;
         _retainedDecisions.Clear();
         _pathsReopenedByUndo.Clear();
         SelectedDateItem = null;
@@ -197,6 +199,13 @@ public sealed class DateWorkflowViewModel : ObservableObject
         _host.RaiseCommandStates();
     }
 
+    internal void MarkDateScanInProgressForTests()
+    {
+        _dateScanInProgress = true;
+        _host.SetStatus("Scan started. Date evidence is still read-only; this can take several minutes.");
+        _host.RaiseCommandStates();
+    }
+
     private async void StartDateWork()
     {
         try
@@ -230,6 +239,14 @@ public sealed class DateWorkflowViewModel : ObservableObject
 
     private async Task ScanDatesAsync()
     {
+        if (_dateScanInProgress)
+        {
+            return;
+        }
+
+        _dateScanInProgress = true;
+        _host.SetStatus("Scan started. Date evidence is still read-only; this can take several minutes.");
+        _host.RaiseCommandStates();
         try
         {
             PathPolicy.ValidateScanRoot(_host.ScanRoot);
@@ -267,6 +284,11 @@ public sealed class DateWorkflowViewModel : ObservableObject
             or IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             _host.SetStatus(exception.Message);
+        }
+        finally
+        {
+            _dateScanInProgress = false;
+            _host.RaiseCommandStates();
         }
     }
 
@@ -483,7 +505,10 @@ public sealed class DateWorkflowViewModel : ObservableObject
                 or WorkflowState.Completed);
 
     private bool CanScanDates() =>
-        _host.CurrentPage == WorkflowPage.DateWork && _dateReport is null;
+        _host.CurrentPage == WorkflowPage.DateWork
+        && !_dateScanInProgress
+        && _dateSnapshot is null
+        && !_dateApplyCompleted;
 
     private bool CanCreateDateSnapshot() =>
         _dateReport is not null

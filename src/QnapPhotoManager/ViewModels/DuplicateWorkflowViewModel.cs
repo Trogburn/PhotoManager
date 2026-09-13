@@ -15,6 +15,7 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
     private DuplicateReviewValidationResult? _duplicateReviewValidation;
     private bool _duplicateReviewerOpened;
     private bool _duplicateSnapshotConfirmed;
+    private bool _duplicateScanInProgress;
     private string? _duplicateSnapshotName;
 
     internal DuplicateWorkflowViewModel(DuplicateWorkflowService duplicates, IShellWorkflowHost host)
@@ -97,6 +98,7 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
         _duplicateArtifacts = null;
         InvalidateDuplicateReview();
         _duplicateSnapshotName = null;
+        _duplicateScanInProgress = false;
         DuplicateUndoItems.Clear();
         DuplicateSnapshotConfirmed = false;
         NotifyDuplicateSurfaceChanged();
@@ -138,6 +140,14 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
 
     private async void ScanDuplicates()
     {
+        if (_duplicateScanInProgress)
+        {
+            return;
+        }
+
+        _duplicateScanInProgress = true;
+        _host.SetStatus("Scan started. Duplicate scan is still read-only; this can take several minutes.");
+        _host.RaiseCommandStates();
         try
         {
             InvalidateDuplicateReview();
@@ -152,6 +162,11 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
         catch (Exception exception)
         {
             _host.SetStatus(exception.Message);
+        }
+        finally
+        {
+            _duplicateScanInProgress = false;
+            _host.RaiseCommandStates();
         }
     }
 
@@ -415,7 +430,8 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
         && _host.CurrentPage == WorkflowPage.Configuration;
 
     private bool CanScanDuplicates() =>
-        _host.Workflow.Session.State == WorkflowState.Configured;
+        _host.Workflow.Session.State == WorkflowState.Configured
+        && !_duplicateScanInProgress;
 
     private bool CanDuplicateDryRun() =>
         _duplicateArtifacts is not null

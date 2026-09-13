@@ -102,6 +102,46 @@ try {
         throw 'EXIF precedence or filename conflict handling failed.'
     }
 
+    $agreeSource = Join-Path $root 'agree-source.jpg'
+    $agreePath = Join-Path $root 'IMG_20200716_181233.jpg'
+    $agreeBitmap = New-Object System.Drawing.Bitmap 1, 1
+    $agreeBitmap.SetPixel(0, 0, [System.Drawing.Color]::White)
+    $agreeBitmap.Save($agreeSource, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+    $agreeBitmap.Dispose()
+    $agreeImage = [System.Drawing.Image]::FromFile($agreeSource)
+    try {
+        $dateProperty = [Runtime.Serialization.FormatterServices]::GetUninitializedObject([System.Drawing.Imaging.PropertyItem])
+        $dateProperty.Id = 0x9003
+        $dateProperty.Type = 2
+        $dateProperty.Value = [Text.Encoding]::ASCII.GetBytes("2020:07:16 18:12:33`0")
+        $dateProperty.Len = $dateProperty.Value.Length
+        $agreeImage.SetPropertyItem($dateProperty)
+        $offsetProperty = [Runtime.Serialization.FormatterServices]::GetUninitializedObject([System.Drawing.Imaging.PropertyItem])
+        $offsetProperty.Id = 0x9011
+        $offsetProperty.Type = 2
+        $offsetProperty.Value = [Text.Encoding]::ASCII.GetBytes("-04:00`0")
+        $offsetProperty.Len = $offsetProperty.Value.Length
+        $agreeImage.SetPropertyItem($offsetProperty)
+        $agreeImage.Save($agreePath, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+    }
+    finally {
+        $agreeImage.Dispose()
+    }
+    $agreeReportPath = Join-Path $root 'agreeing-clock-review.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $agreePath -OutputPath $agreeReportPath | Out-Null
+    $agreeItem = @((Get-Content -Path $agreeReportPath -Raw | ConvertFrom-Json).items)[0]
+    if ($agreeItem.status -eq 'Conflict') {
+        throw 'Matching EXIF and filename clocks were treated as a timezone conflict.'
+    }
+    if ($agreeItem.source -ne 'exif-DateTimeOriginal' -or $agreeItem.status -notin @('Proposed', 'AlreadyApplied')) {
+        throw "Agreeing EXIF/filename clocks produced $($agreeItem.status) from $($agreeItem.source)."
+    }
+    $agreeExif = @($agreeItem.evidenceComparison | Where-Object label -eq 'EXIF')[0]
+    $agreeName = @($agreeItem.evidenceComparison | Where-Object label -eq 'Filename')[0]
+    if ($agreeExif.utc -ne $agreeName.utc) {
+        throw "Agreeing clocks kept different UTC instants. exif=$($agreeExif.utc) filename=$($agreeName.utc)"
+    }
+
     $savedReviewFile = Join-Path $root '2024-06-07_saved-review.txt'
     'saved review' | Set-Content -Path $savedReviewFile -Encoding UTF8
     $savedReview = Join-Path $root 'saved-review.json'
@@ -200,6 +240,18 @@ try {
     $minuteToleranceItem = @((Get-Content -Path $minuteToleranceReport -Raw | ConvertFrom-Json).items)[0]
     if ($minuteToleranceItem.status -ne 'Proposed' -or $minuteToleranceItem.source -ne 'exif-DateTimeOriginal') {
         throw "Equivalent mixed-timezone evidence with a one-second difference was not proposed. status=$($minuteToleranceItem.status)"
+    }
+
+    $pixelPath = Join-Path $root 'PXL_20201225_144114.jpg'
+    New-ExifJpeg -Path $pixelPath -Tags @{ 0x9003 = '2020:12:25 08:41:14'; 0x9011 = '-06:00' }
+    $pixelReport = Join-Path $root 'pixel-utc-filename-review.json'
+    & (Join-Path $PSScriptRoot '..\repair-dates.ps1') -Path $pixelPath -OutputPath $pixelReport | Out-Null
+    $pixelItem = @((Get-Content -Path $pixelReport -Raw | ConvertFrom-Json).items)[0]
+    if ($pixelItem.status -eq 'Conflict') {
+        throw 'Pixel UTC filename vs local EXIF within 24 hours was treated as a conflict.'
+    }
+    if ($pixelItem.source -ne 'exif-DateTimeOriginal' -or $pixelItem.status -notin @('Proposed', 'AlreadyApplied')) {
+        throw "Pixel UTC filename vs local EXIF produced $($pixelItem.status) from $($pixelItem.source)."
     }
 
     $cameraFile = Join-Path $root 'PXL_20240102_153045.txt'

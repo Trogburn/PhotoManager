@@ -197,6 +197,27 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
+    public void DateScanLocksWhileInProgressAndReportsInTheFooter()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var viewModel = CreateViewModel(root);
+            viewModel.StartDateWorkCommand.Execute(null);
+            Assert.True(SpinWait.SpinUntil(
+                () => viewModel.CurrentPage == WorkflowPage.DateWork,
+                TimeSpan.FromSeconds(3)));
+
+            Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
+            viewModel.MarkDateScanInProgressForTests();
+
+            Assert.False(viewModel.ScanDatesCommand.CanExecute(null));
+            Assert.StartsWith("Scan started.", viewModel.StatusMessage);
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
     public void StartDateWorkRejectsLocalScanRoot()
     {
         var root = NewTempDirectory();
@@ -310,7 +331,7 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
             var first = @"\\server\share\photos\one.jpg";
             var second = @"\\server\share\photos\two.jpg";
             viewModel.LoadDateReviewForTests(CreateReport(first, second));
-            Assert.False(viewModel.ScanDatesCommand.CanExecute(null));
+            Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
             Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
             Assert.True(viewModel.DateItems[0].ApproveCommand.CanExecute(null));
 
@@ -318,7 +339,7 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
             Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
             viewModel.DateItems[1].SkipCommand.Execute(null);
             Assert.True(viewModel.CreateDateSnapshotCommand.CanExecute(null));
-            Assert.False(viewModel.ScanDatesCommand.CanExecute(null));
+            Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
             Assert.False(viewModel.CanConfirmDateSnapshot);
 
             viewModel.MarkDateSnapshotForTests(new DateSnapshot("review.json", DateTimeOffset.UtcNow, []));
