@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $testRoot = $PSScriptRoot
 $tests = @(
+    'local-config-tests.ps1',
     'phase1-tests.ps1',
     'phase2-smoke.ps1',
     'phase2-tests.ps1',

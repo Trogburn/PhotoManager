@@ -22,13 +22,14 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot 'common-config.ps1')
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $configFullPath = [IO.Path]::GetFullPath($ConfigPath)
 if (-not (Test-Path -LiteralPath $configFullPath)) { throw "Configuration file not found: $configFullPath" }
-$config = Get-Content -LiteralPath $configFullPath -Raw | ConvertFrom-Json
+$config = Get-CzkawkaConfig -ConfigPath $configFullPath
 $effectiveRoot = if ($ScanRoot) { $ScanRoot } else { [string]$config.scan.uncRoot }
 if ([string]::IsNullOrWhiteSpace($effectiveRoot) -or $effectiveRoot -like '*YOUR-SERVER*') {
-    throw 'Set scan.uncRoot in tools/czkawka/config.json or provide -ScanRoot with the real UNC path.'
+    throw 'Set scan.uncRoot in tools/czkawka/config.local.json or provide -ScanRoot with the real UNC path.'
 }
 
 Push-Location $repositoryRoot

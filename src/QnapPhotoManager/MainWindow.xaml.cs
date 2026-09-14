@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using QnapPhotoManager.Infrastructure;
 using QnapPhotoManager.Services;
@@ -19,11 +20,14 @@ public partial class MainWindow : Window
         var artifactStore = new AtomicArtifactStore(pathPolicy);
         var duplicateWorkflow = new DuplicateWorkflowService(
             new PowerShellScriptRunner(), artifactStore, pathPolicy);
+        var localDefaults = LocalDefaults.TryLoad(
+            Path.Combine(duplicateWorkflow.RepositoryRoot, "tools", "czkawka"));
         DataContext = new MainViewModel(
             new WorkflowStateMachine(),
             artifactStore,
             new DateRepairService(pathPolicy),
             duplicateWorkflow,
-            confirmationService);
+            confirmationService,
+            localDefaults);
     }
 }

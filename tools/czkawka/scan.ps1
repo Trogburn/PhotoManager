@@ -140,12 +140,13 @@ function Invoke-CzkawkaProcess {
     }
 }
 
+. (Join-Path $PSScriptRoot 'common-config.ps1')
 if (-not (Test-Path -LiteralPath $ConfigPath)) {
     throw "Configuration file not found: $ConfigPath"
 }
 
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
-$config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+$config = Get-CzkawkaConfig -ConfigPath $ConfigPath
 $effectiveScanRoot = if ($ScanRoot) { $ScanRoot } else { [string]$config.scan.uncRoot }
 $executablePath = Resolve-ConfiguredPath -PathValue ([string]$config.czkawka.exePath) -RepositoryRoot $repositoryRoot
 $baseReportRoot = Resolve-ConfiguredPath -PathValue ([string]$config.scan.localReportRoot) -RepositoryRoot $repositoryRoot

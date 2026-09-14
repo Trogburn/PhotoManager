@@ -11,6 +11,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common-scan-id.ps1')
+. (Join-Path $PSScriptRoot 'common-config.ps1')
 
 if (-not (Test-Path -LiteralPath $InputPath)) {
     throw "Normalized result file not found: $InputPath"
@@ -20,7 +21,7 @@ if ($document.schemaVersion -ne 1) {
     throw "Unsupported normalized result schema version: $($document.schemaVersion)"
 }
 
-$config = if (Test-Path -LiteralPath $ConfigPath) { Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json } else { $null }
+$config = if (Test-Path -LiteralPath $ConfigPath) { Get-CzkawkaConfig -ConfigPath $ConfigPath } else { $null }
 $protectedPaths = if ($null -ne $config) { @($config.scan.protectedPaths) } else { @() }
 $preferredDirectories = if ($null -ne $config) { @($config.scan.preferredDirectories) } else { @() }
 

@@ -1,5 +1,6 @@
 using QnapPhotoManager.Models;
 using QnapPhotoManager.Services;
+using QnapPhotoManager.ViewModels;
 using System.Text.Json;
 using Xunit;
 
@@ -85,5 +86,98 @@ public sealed class SafetyContractTests
         var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(path);
         return path;
+    }
+}
+
+public sealed class LocalDefaultsTests
+{
+    [Fact]
+    public void TryLoadReturnsNullWhenLocalFileIsMissing()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            Assert.Null(LocalDefaults.TryLoad(root));
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void TryLoadReadsScanAndQuarantineFromLocalOverlay()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(root, "config.local.json"),
+                """{"scan":{"uncRoot":"\\\\NAS\\Lab\\Input","quarantineRoot":"\\\\NAS\\Lab\\Quarantine"}}""");
+
+            var defaults = LocalDefaults.TryLoad(root);
+            Assert.NotNull(defaults);
+            Assert.Equal(@"\\NAS\Lab\Input", defaults!.ScanRoot);
+            Assert.Equal(@"\\NAS\Lab\Quarantine", defaults.QuarantineRoot);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void MainViewModelKeepsPlaceholdersWithoutLocalDefaults()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var viewModel = CreateViewModel(root);
+            Assert.Equal(@"\\SERVER\Share\Photos", viewModel.ScanRoot);
+            Assert.Equal(@"\\SERVER\Share\PhotoQuarantine", viewModel.QuarantineRoot);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public void MainViewModelAppliesLocalDefaults()
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var viewModel = CreateViewModel(
+                root,
+                new LocalDefaults
+                {
+                    ScanRoot = @"\\NAS\Lab\Input",
+                    QuarantineRoot = @"\\NAS\Lab\Quarantine"
+                });
+            Assert.Equal(@"\\NAS\Lab\Input", viewModel.ScanRoot);
+            Assert.Equal(@"\\NAS\Lab\Quarantine", viewModel.QuarantineRoot);
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    private static MainViewModel CreateViewModel(string root, LocalDefaults? defaults = null)
+    {
+        var policy = new PathPolicy(root);
+        var store = new AtomicArtifactStore(policy);
+        return new MainViewModel(
+            new WorkflowStateMachine(),
+            store,
+            new DateRepairService(policy),
+            new DuplicateWorkflowService(new PowerShellScriptRunner(), store, policy, root),
+            new FakeConfirmationService(true),
+            defaults);
     }
 }
