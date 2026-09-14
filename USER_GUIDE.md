@@ -12,11 +12,7 @@ The normal one-command workflow stops at the reviewer. It never moves, deletes, 
 
 ## Before First Use
 
-Open PowerShell 7 in the repository folder:
-
-```powershell
-Set-Location C:\dev\GitHub\QnapServerManagement
-```
+Open PowerShell 7 in the repository folder.
 
 Confirm the tools are available:
 
@@ -50,7 +46,12 @@ The Czkawka CLI is third-party software downloaded unchanged from its official [
 
 ## Configure Your Share
 
-Edit `tools/czkawka/config.json` and replace these placeholders:
+The committed `tools/czkawka/config.json` uses placeholders only. Copy
+`tools/czkawka/config.local.json.example` to gitignored
+`tools/czkawka/config.local.json` and set your UNC paths there. The app and
+CLI scripts overlay that file automatically. Do not commit real share paths.
+
+Placeholder fields:
 
 - `scan.uncRoot`: the photo share, for example `\\server\photos`
 - `scan.protectedPaths`: folders that must never be quarantined
@@ -121,10 +122,12 @@ review.json
 If recurring reports are useful, schedule only this read-only command:
 
 ```powershell
-pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File C:\dev\GitHub\QnapServerManagement\tools\czkawka\run-workflow.ps1 -ScanRoot "\\server\photos" -ExportOnly
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\run-workflow.ps1 -ScanRoot "\\server\photos" -ExportOnly
 ```
 
-Use an account with share read permission and local report write permission. Do not schedule remediation, `-Apply`, date-repair apply commands, reviewer decisions, or any quarantine path. This scan/report job cannot quarantine, delete, rename, or change timestamps; review and any approved remediation remain manual.
+Set the task's start-in folder to the repository root, or substitute the full
+path to `run-workflow.ps1` on this machine. Use an account with share read
+permission and local report write permission. Do not schedule remediation, `-Apply`, date-repair apply commands, reviewer decisions, or any quarantine path. This scan/report job cannot quarantine, delete, rename, or change timestamps; review and any approved remediation remain manual.
 
 ## Reviewer Actions
 

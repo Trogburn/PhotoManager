@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "source": "czkawka",
-  "inputPath": "C:\\dev\\GitHub\\QnapServerManagement\\tools\\czkawka\\tests\\fixtures\\dup-group.json",
-  "rawArtifactPath": "C:\\dev\\GitHub\\QnapServerManagement\\tools\\czkawka\\tests\\fixtures\\dup-group.json",
+  "inputPath": "tools\\czkawka\\tests\\fixtures\\dup-group.json",
+  "rawArtifactPath": "tools\\czkawka\\tests\\fixtures\\dup-group.json",
   "sourceScan": "raw-czkawka",
   "czkawkaVersion": "",
   "scanRoot": "",

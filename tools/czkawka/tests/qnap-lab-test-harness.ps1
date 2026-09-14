@@ -9,28 +9,55 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# This is intentionally a single exact value. Change it only as part of an
-# reviewed lab-infrastructure change; do not broaden this to a server/share
-# pattern or to a production path.
-$AllowedLabRoot = '\\TrogQNAP6HDD\PhotoWorkflowTest'
+# Real lab UNC paths belong in qnap-lab.local.json or QNAP_LAB_ALLOWED_ROOT,
+# never in committed source. Network mode still requires an exact match.
 $HarnessVersion = 2
+
+function Assert-SafeLabUnc {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if ($Path -notmatch '^\\\\[^\\]+\\[^\\]+') {
+        throw 'Lab root must be a UNC path of the form \\SERVER\Share[\optional-child].'
+    }
+    if ($Path -match '^[A-Za-z]:\\?$') {
+        throw 'Drive roots are never valid lab roots.'
+    }
+    if ($Path -match '(?i)\\(production|prod|photos|media|home|public)(\\|$)') {
+        throw 'Production-like paths are not valid lab roots.'
+    }
+}
+
+function Get-AllowedLabRoot {
+    if (-not [string]::IsNullOrWhiteSpace($env:QNAP_LAB_ALLOWED_ROOT)) {
+        return $env:QNAP_LAB_ALLOWED_ROOT
+    }
+
+    $localPath = Join-Path $PSScriptRoot 'qnap-lab.local.json'
+    if (Test-Path -LiteralPath $localPath -PathType Leaf) {
+        $local = Get-Content -LiteralPath $localPath -Raw | ConvertFrom-Json
+        $fromFile = [string]$local.allowedLabRoot
+        if (-not [string]::IsNullOrWhiteSpace($fromFile)) {
+            return $fromFile
+        }
+    }
+
+    return $null
+}
 
 function Get-RequiredLabRoot {
     if ($env:QNAP_LAB_TESTS -cne '1') {
         throw 'Lab tests are disabled. Set QNAP_LAB_TESTS=1 explicitly.'
     }
     if ([string]::IsNullOrEmpty($env:QNAP_LAB_ROOT)) {
-        throw "QNAP_LAB_ROOT is required and must equal $AllowedLabRoot."
+        throw 'QNAP_LAB_ROOT is required. Set it to your disposable lab UNC, or copy qnap-lab.local.json.example to qnap-lab.local.json.'
     }
-    if ($env:QNAP_LAB_ROOT -cne $AllowedLabRoot) {
-        throw "QNAP_LAB_ROOT must exactly equal the allowlisted lab UNC path: $AllowedLabRoot"
+
+    $allowed = Get-AllowedLabRoot
+    if ($allowed -and $env:QNAP_LAB_ROOT -cne $allowed) {
+        throw 'QNAP_LAB_ROOT must exactly equal the allowlisted lab UNC from qnap-lab.local.json or QNAP_LAB_ALLOWED_ROOT.'
     }
-    if ($env:QNAP_LAB_ROOT -match '^[A-Za-z]:\\?$') {
-        throw 'Drive roots are never valid lab roots.'
-    }
-    if ($env:QNAP_LAB_ROOT -match '(?i)\\(production|prod|photos|media|home|public)(\\|$)') {
-        throw 'Production-like paths are not valid lab roots.'
-    }
+
+    Assert-SafeLabUnc -Path $env:QNAP_LAB_ROOT
     return $env:QNAP_LAB_ROOT
 }
 
