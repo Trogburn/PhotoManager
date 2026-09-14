@@ -28,11 +28,68 @@ public sealed class PathPolicy(string applicationRoot)
             throw new ArgumentException("A scan root is required.", nameof(scanRoot));
         }
 
-        if (!scanRoot.StartsWith(@"\\", StringComparison.Ordinal))
+        var trimmed = scanRoot.Trim();
+        if (trimmed.StartsWith(@"\\", StringComparison.Ordinal))
         {
-            throw new ArgumentException("Production scan roots must be UNC paths.", nameof(scanRoot));
+            if (!System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\\\\[^\\]+\\[^\\]+"))
+            {
+                throw new ArgumentException(
+                    @"UNC scan roots must be a share path such as \\server\share\Photos.",
+                    nameof(scanRoot));
+            }
+
+            return;
+        }
+
+        if (!Path.IsPathRooted(trimmed) || trimmed.Length < 3 || !char.IsLetter(trimmed[0]) || trimmed[1] != ':')
+        {
+            throw new ArgumentException(
+                @"Scan roots must be a UNC path (\\server\share\Photos) or a local folder (D:\Photos).",
+                nameof(scanRoot));
+        }
+
+        if (System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^[A-Za-z]:[\\/]?$"))
+        {
+            throw new ArgumentException(
+                @"A drive root such as C:\ is not a valid scan root. Choose a folder on that drive.",
+                nameof(scanRoot));
+        }
+
+        var full = Path.GetFullPath(trimmed);
+        var driveRoot = Path.GetPathRoot(full);
+        if (string.IsNullOrEmpty(driveRoot)
+            || string.Equals(
+                full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                driveRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException(
+                @"A drive root such as C:\ is not a valid scan root. Choose a folder on that drive.",
+                nameof(scanRoot));
+        }
+
+        try
+        {
+            if (new DriveInfo(driveRoot).DriveType == DriveType.Network)
+            {
+                throw new ArgumentException(
+                    @"Mapped network drives are not allowed. Use the UNC path (\\server\share) instead.",
+                    nameof(scanRoot));
+            }
+        }
+        catch (ArgumentException)
+        {
+            throw;
+        }
+        catch (IOException)
+        {
+            // Missing or unready drive letters fail later when the folder is opened.
         }
     }
+
+    public static bool RequiresAllowLocalRoot(string scanRoot) =>
+        !string.IsNullOrWhiteSpace(scanRoot)
+        && !scanRoot.TrimStart().StartsWith(@"\\", StringComparison.Ordinal);
 
     public static bool IsWithin(string candidatePath, string parentPath)
     {

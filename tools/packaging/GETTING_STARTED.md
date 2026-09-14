@@ -29,8 +29,10 @@ folder instead.
 The boxes start with placeholders such as `\\SERVER\Share\Photos`. Replace
 those with **your** folders.
 
-1. **Scan root:** a UNC path to the photos you want to review, for example
-   `\\NAS\Share\Photos`. Do not use a mapped drive letter (`P:\`).
+1. **Scan root:** the photos you want to review. Use a UNC path such as
+   `\\NAS\Share\Photos`, or a folder on a local drive such as `D:\Photos`.
+   Do not use a drive root (`C:\`) or a mapped network letter (`P:\`).
+   For a NAS, prefer the UNC path.
 2. **Quarantine root:** a folder **outside** that photo tree. Duplicates that
    you approve for removal are moved here, not deleted.
 3. **Artifact root:** leave `artifacts`. That evidence stays on this PC, not
