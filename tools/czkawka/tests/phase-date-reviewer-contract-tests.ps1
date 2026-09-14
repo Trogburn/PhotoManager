@@ -4,7 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$root = Join-Path ([System.IO.Path]::GetTempPath()) "qnap-date-reviewer-contract-$([guid]::NewGuid().ToString('N'))"
+$root = Join-Path ([System.IO.Path]::GetTempPath()) "photo-date-reviewer-contract-$([guid]::NewGuid().ToString('N'))"
 New-Item -Path $root -ItemType Directory -Force | Out-Null
 try {
     $file = Join-Path $root '2026-01-01_candidate.jpg'

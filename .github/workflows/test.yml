@@ -18,7 +18,7 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Run managed unit tests
-        run: dotnet test .\QnapPhotoManager.slnx -c Release --filter "Category!=UI" --collect:"XPlat Code Coverage"
+        run: dotnet test .\PhotoManager.slnx -c Release --filter "Category!=UI" --collect:"XPlat Code Coverage"
 
       - name: Run PowerShell workflow tests
         shell: pwsh

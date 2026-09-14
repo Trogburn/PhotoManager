@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultApplicationDefinition>true</EnableDefaultApplicationDefinition>
+    <AssemblyName>PhotoManager</AssemblyName>
+    <Product>Photo Manager</Product>
+    <Company>PhotoManager</Company>
+    <Version>1.0.0</Version>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="PhotoManager.Tests" />
+  </ItemGroup>
+</Project>

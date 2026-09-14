@@ -8,7 +8,7 @@ $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..'))
 $toolRoot = Join-Path $repoRoot 'tools\czkawka'
 $workflow = Join-Path $toolRoot 'run-workflow.ps1'
 $configPath = Join-Path $toolRoot 'config.json'
-$tempRoot = Join-Path ([IO.Path]::GetTempPath()) "qnap-phase7-$([guid]::NewGuid().ToString('N'))"
+$tempRoot = Join-Path ([IO.Path]::GetTempPath()) "photo-phase7-$([guid]::NewGuid().ToString('N'))"
 $fixtureRoot = Join-Path $tempRoot 'fixture'
 $reportRoot = Join-Path $tempRoot 'reports'
 

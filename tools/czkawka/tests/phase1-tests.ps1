@@ -9,7 +9,7 @@ $toolRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $installScript = Join-Path $toolRoot 'install.ps1'
 $scanScript = Join-Path $toolRoot 'scan.ps1'
 $configPath = Join-Path $toolRoot 'config.json'
-$tempRoot = Join-Path ([IO.Path]::GetTempPath()) "qnap-phase1-$([guid]::NewGuid().ToString('N'))"
+$tempRoot = Join-Path ([IO.Path]::GetTempPath()) "photo-phase1-$([guid]::NewGuid().ToString('N'))"
 New-Item -Path $tempRoot -ItemType Directory -Force | Out-Null
 
 function Test-ScriptSyntax {
@@ -52,7 +52,7 @@ try {
     $missingConfigObject.scan.localReportRoot = Join-Path $tempRoot 'reports-missing-exe'
     $missingConfigObject | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $missingExeConfig -Encoding utf8
     try {
-        & $scanScript -ConfigPath $missingExeConfig -ScanRoot '\\qnap-phase1-missing\photos' | Out-Null
+        & $scanScript -ConfigPath $missingExeConfig -ScanRoot '\\photo-phase1-missing\photos' | Out-Null
         throw 'Missing executable unexpectedly succeeded.'
     }
     catch {
@@ -69,7 +69,7 @@ try {
     $shareConfigObject.scan.localReportRoot = Join-Path $tempRoot 'reports-missing-share'
     $shareConfigObject | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $missingShareConfig -Encoding utf8
     try {
-        & $scanScript -ConfigPath $missingShareConfig -ScanRoot '\\localhost\qnap-phase1-missing-share' | Out-Null
+        & $scanScript -ConfigPath $missingShareConfig -ScanRoot '\\localhost\photo-phase1-missing-share' | Out-Null
         throw 'Missing share unexpectedly succeeded.'
     }
     catch {
@@ -233,8 +233,8 @@ try {
             $uncRoot = $uncCandidate
         }
     }
-    if (-not $uncRoot -and -not [string]::IsNullOrWhiteSpace($env:QNAP_SCAN_ROOT) -and $env:QNAP_SCAN_ROOT.StartsWith('\\') -and (Test-PathTimed -PathValue $env:QNAP_SCAN_ROOT)) {
-        $uncRoot = $env:QNAP_SCAN_ROOT
+    if (-not $uncRoot -and -not [string]::IsNullOrWhiteSpace($env:PHOTO_SCAN_ROOT) -and $env:PHOTO_SCAN_ROOT.StartsWith('\\') -and (Test-PathTimed -PathValue $env:PHOTO_SCAN_ROOT)) {
+        $uncRoot = $env:PHOTO_SCAN_ROOT
     }
 
     if ($uncRoot) {

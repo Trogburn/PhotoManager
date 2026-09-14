@@ -4,7 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$root = Join-Path ([System.IO.Path]::GetTempPath()) "qnap-phase4-$([guid]::NewGuid().ToString('N'))"
+$root = Join-Path ([System.IO.Path]::GetTempPath()) "photo-phase4-$([guid]::NewGuid().ToString('N'))"
 New-Item -Path $root -ItemType Directory -Force | Out-Null
 try {
     $input = Join-Path $PSScriptRoot 'fixtures\classifier-input.json'

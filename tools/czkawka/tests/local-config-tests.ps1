@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 . (Join-Path $PSScriptRoot '..\common-config.ps1')
 
-$tempRoot = Join-Path ([IO.Path]::GetTempPath()) "qnap-local-config-$([guid]::NewGuid().ToString('N'))"
+$tempRoot = Join-Path ([IO.Path]::GetTempPath()) "photo-local-config-$([guid]::NewGuid().ToString('N'))"
 New-Item -Path $tempRoot -ItemType Directory -Force | Out-Null
 
 try {

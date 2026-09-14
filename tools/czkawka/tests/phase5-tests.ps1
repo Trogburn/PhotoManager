@@ -4,7 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$root = Join-Path ([System.IO.Path]::GetTempPath()) "qnap-phase5-$([guid]::NewGuid().ToString('N'))"
+$root = Join-Path ([System.IO.Path]::GetTempPath()) "photo-phase5-$([guid]::NewGuid().ToString('N'))"
 New-Item -Path $root -ItemType Directory -Force | Out-Null
 try {
     $fixture = Join-Path $PSScriptRoot 'fixtures\phase5-review.json'
