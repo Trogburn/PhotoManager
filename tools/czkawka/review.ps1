@@ -396,7 +396,7 @@ function Refresh-Review {
     if ($null -eq $group) {
         $header.Text = 'Review complete — close this window to continue'
         $selectedPreviewCaption.Text = ''
-        $details.Text = 'All available groups have decisions. Click "Finish review" below to return to Qnap Photo Manager, then run the dry-run.'
+        $details.Text = 'All available groups have decisions. Click "Finish review" below to return to Photo Manager, then run the dry-run.'
         return
     }
     $groupDecisionKey = "group:$($group.groupId)"
