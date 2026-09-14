@@ -8,28 +8,38 @@ actual scan and remediation work.
 
 ## Install and upgrade
 
+The supported end-user package is a Windows x64 zip. Recipients do not need
+this repository, Visual Studio, or the .NET SDK. macOS is not supported
+because the shell is a WPF application.
+
 Requirements:
 
 - Windows 10/11 x64.
-- .NET 10 Desktop Runtime, or the SDK when building from source.
-- Read access to the QNAP share for scans and write access to a local artifact
-  directory.
-- PowerShell 7 (`pwsh`) or Windows PowerShell for the date-repair adapter.
+- Read access to the QNAP share and write access to a separate quarantine
+  folder and a local artifact directory.
+- Windows PowerShell (used to launch the bundled workflow scripts).
 
-Build and publish from the repository root:
+Download `QnapPhotoManager-*-win-x64.zip` from the GitHub Release (or the
+Package Windows workflow artifact). Extract it, then double-click
+`Install.bat`. That copies the app to `%LOCALAPPDATA%\QnapPhotoManager` and
+creates a Start Menu shortcut. No administrator rights are required. The zip
+already includes a self-contained .NET runtime and the pinned Czkawka CLI.
+
+To rebuild the zip from source:
 
 ```powershell
-dotnet build .\src\QnapPhotoManager\QnapPhotoManager.csproj
-dotnet publish .\src\QnapPhotoManager\QnapPhotoManager.csproj `
-  --configuration Release --runtime win-x64 --self-contained false `
-  --output "$env:LOCALAPPDATA\QnapPhotoManager"
+pwsh -NoProfile -File .\tools\packaging\publish-windows.ps1
 ```
 
-Run `QnapPhotoManager.exe` from that published directory. Keep the directory
-under the user's profile (rather than `Program Files`) because the default
-relative `artifacts` directory is next to the application and must be writable.
-For a new version, publish to a new versioned directory, verify the build, then
-launch that directory. Do not replace a running executable.
+The output is `dist\QnapPhotoManager-<version>-win-x64.zip`. Keep the installed
+directory under the user profile (rather than Program Files) because the
+default `artifacts` folder is next to the application and must be writable.
+For a new version, install again over `%LOCALAPPDATA%\QnapPhotoManager` only
+after closing the running app.
+
+Developers cloning this repository can keep machine-specific UNC defaults in
+gitignored `tools/czkawka/config.local.json`. The desktop shell and CLI scripts
+overlay that file on startup. The Windows zip does not include `*.local.json`.
 
 The application does not silently install, download, delete, move, or rename
 media. Keep the existing `tools\czkawka` installation and its pinned checksum

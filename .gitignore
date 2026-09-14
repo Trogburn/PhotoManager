@@ -1,3 +1,6 @@
+# Packaged installers and publish output
+dist/
+
 # Local runtime artifacts
 reports/
 **/reports/
@@ -7,6 +10,7 @@ reports/
 
 # Tooling runtime files
 tools/czkawka/config.local.json
+tools/czkawka/tests/qnap-lab.local.json
 tools/czkawka/bin/
 tools/czkawka/tests/temp/
 
