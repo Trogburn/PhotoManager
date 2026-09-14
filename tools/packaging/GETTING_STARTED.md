@@ -64,3 +64,9 @@ Do not move files around in Explorer to "fix" a quarantine.
 
 Close Qnap Photo Manager, then run `Install.bat` from the new zip. That
 replaces the copy under `%LOCALAPPDATA%\QnapPhotoManager`.
+
+## Optional thanks
+
+The app is free. If it helped, you can send coffee money via
+[GitHub Sponsors](https://github.com/sponsors/Trogburn). You do not need to
+do that to keep using it.
