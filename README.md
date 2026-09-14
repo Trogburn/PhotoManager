@@ -5,6 +5,8 @@ Windows users who only want the photo app can download `QnapPhotoManager-*-win-x
 
 For a beginner-focused, copy-paste operating guide, see [USER_GUIDE.md](USER_GUIDE.md). The recommended one-command workflow is `tools/czkawka/run-workflow.ps1`; it scans, normalizes, classifies, and opens the reviewer without moving files.
 
+If this project saved you time, you can [buy me a coffee on GitHub Sponsors](https://github.com/sponsors/Trogburn). It is optional and never required to use the app.
+
 ## Phase 1: Czkawka CLI foundation
 
 This repository now includes a pinned Windows installation and read-only scan workflow for the Czkawka CLI.
