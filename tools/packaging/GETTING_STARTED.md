@@ -1,4 +1,4 @@
-# Qnap Photo Manager — install and first use
+# Photo Manager — install and first use
 
 This zip is the Windows app. You do not need GitHub, Visual Studio, or the
 .NET SDK. **macOS is not supported.**
@@ -16,12 +16,12 @@ You need:
 2. Double-click `Install.bat`.
 3. If Windows SmartScreen asks, choose **More info**, then **Run anyway**. The
    build is not code-signed.
-4. Open **Qnap Photo Manager** from the Start Menu.
+4. Open **Photo Manager** from the Start Menu.
 
 No administrator rights are required. Files go to
-`%LOCALAPPDATA%\QnapPhotoManager`.
+`%LOCALAPPDATA%\PhotoManager`.
 
-You can skip install and double-click `QnapPhotoManager.exe` in the extracted
+You can skip install and double-click `PhotoManager.exe` in the extracted
 folder instead.
 
 ## First use
@@ -62,8 +62,8 @@ Do not move files around in Explorer to "fix" a quarantine.
 
 ## Upgrade
 
-Close Qnap Photo Manager, then run `Install.bat` from the new zip. That
-replaces the copy under `%LOCALAPPDATA%\QnapPhotoManager`.
+Close Photo Manager, then run `Install.bat` from the new zip. That
+replaces the copy under `%LOCALAPPDATA%\PhotoManager`.
 
 ## Optional thanks
 
