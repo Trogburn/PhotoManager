@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..\..'))
 $toolRoot = Join-Path $repoRoot 'tools\czkawka'
-$tempRoot = Join-Path ([IO.Path]::GetTempPath()) "qnap-phase8-$([guid]::NewGuid().ToString('N'))"
+$tempRoot = Join-Path ([IO.Path]::GetTempPath()) "photo-phase8-$([guid]::NewGuid().ToString('N'))"
 $fixtureRoot = Join-Path $tempRoot 'fixture'
 $reportRoot = Join-Path $tempRoot 'reports'
 $quarantineRoot = Join-Path $tempRoot 'quarantine'
@@ -149,7 +149,7 @@ try {
             -ConfigPath $configPath -OutputDirectory (Join-Path $tempRoot 'tampered-verification') -AllowLocalRoot
     } 'Verification failed'
 
-    # Exercise the one-command workflow's date-review option without any QNAP path.
+    # Exercise the one-command workflow's date-review option without any NAS path.
     $workflowResult = & (Join-Path $toolRoot 'run-workflow.ps1') -ConfigPath $configPath `
         -ScanRoot $fixtureRoot -IncludeDateReview -ExportOnly -AllowLocalRoot |
         Where-Object { $null -ne $_.PSObject.Properties['classifiedPath'] } | Select-Object -Last 1

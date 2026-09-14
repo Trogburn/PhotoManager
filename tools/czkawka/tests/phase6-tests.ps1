@@ -4,7 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$root = Join-Path ([IO.Path]::GetTempPath()) "qnap-phase6-$([guid]::NewGuid().ToString('N'))"
+$root = Join-Path ([IO.Path]::GetTempPath()) "photo-phase6-$([guid]::NewGuid().ToString('N'))"
 $source = Join-Path $root 'source'
 $quarantine = Join-Path $root 'quarantine'
 New-Item -Path $source -ItemType Directory -Force | Out-Null

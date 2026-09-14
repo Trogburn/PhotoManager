@@ -10,7 +10,7 @@ reports/
 
 # Tooling runtime files
 tools/czkawka/config.local.json
-tools/czkawka/tests/qnap-lab.local.json
+tools/czkawka/tests/photo-lab.local.json
 tools/czkawka/bin/
 tools/czkawka/tests/temp/
 

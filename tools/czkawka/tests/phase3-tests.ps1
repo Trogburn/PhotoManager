@@ -4,7 +4,7 @@ param()
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$root = Join-Path ([System.IO.Path]::GetTempPath()) "qnap-phase3-tests-$([guid]::NewGuid().ToString('N'))"
+$root = Join-Path ([System.IO.Path]::GetTempPath()) "photo-phase3-tests-$([guid]::NewGuid().ToString('N'))"
 New-Item -Path $root -ItemType Directory -Force | Out-Null
 try {
     Add-Type -AssemblyName System.Drawing

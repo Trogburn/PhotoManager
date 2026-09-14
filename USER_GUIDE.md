@@ -1,4 +1,4 @@
-# Qnap Photo Review Workflow User Guide
+# Photo Manager review workflow user guide
 
 This guide is for running the workflow on Windows with minimal PowerShell knowledge. The workflow is deliberately staged:
 

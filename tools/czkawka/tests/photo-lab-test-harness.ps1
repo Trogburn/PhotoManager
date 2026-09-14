@@ -9,7 +9,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-# Real lab UNC paths belong in qnap-lab.local.json or QNAP_LAB_ALLOWED_ROOT,
+# Real lab UNC paths belong in photo-lab.local.json or PHOTO_LAB_ALLOWED_ROOT,
 # never in committed source. Network mode still requires an exact match.
 $HarnessVersion = 2
 
@@ -28,11 +28,11 @@ function Assert-SafeLabUnc {
 }
 
 function Get-AllowedLabRoot {
-    if (-not [string]::IsNullOrWhiteSpace($env:QNAP_LAB_ALLOWED_ROOT)) {
-        return $env:QNAP_LAB_ALLOWED_ROOT
+    if (-not [string]::IsNullOrWhiteSpace($env:PHOTO_LAB_ALLOWED_ROOT)) {
+        return $env:PHOTO_LAB_ALLOWED_ROOT
     }
 
-    $localPath = Join-Path $PSScriptRoot 'qnap-lab.local.json'
+    $localPath = Join-Path $PSScriptRoot 'photo-lab.local.json'
     if (Test-Path -LiteralPath $localPath -PathType Leaf) {
         $local = Get-Content -LiteralPath $localPath -Raw | ConvertFrom-Json
         $fromFile = [string]$local.allowedLabRoot
@@ -45,20 +45,20 @@ function Get-AllowedLabRoot {
 }
 
 function Get-RequiredLabRoot {
-    if ($env:QNAP_LAB_TESTS -cne '1') {
-        throw 'Lab tests are disabled. Set QNAP_LAB_TESTS=1 explicitly.'
+    if ($env:PHOTO_LAB_TESTS -cne '1') {
+        throw 'Lab tests are disabled. Set PHOTO_LAB_TESTS=1 explicitly.'
     }
-    if ([string]::IsNullOrEmpty($env:QNAP_LAB_ROOT)) {
-        throw 'QNAP_LAB_ROOT is required. Set it to your disposable lab UNC, or copy qnap-lab.local.json.example to qnap-lab.local.json.'
+    if ([string]::IsNullOrEmpty($env:PHOTO_LAB_ROOT)) {
+        throw 'PHOTO_LAB_ROOT is required. Set it to your disposable lab UNC, or copy photo-lab.local.json.example to photo-lab.local.json.'
     }
 
     $allowed = Get-AllowedLabRoot
-    if ($allowed -and $env:QNAP_LAB_ROOT -cne $allowed) {
-        throw 'QNAP_LAB_ROOT must exactly equal the allowlisted lab UNC from qnap-lab.local.json or QNAP_LAB_ALLOWED_ROOT.'
+    if ($allowed -and $env:PHOTO_LAB_ROOT -cne $allowed) {
+        throw 'PHOTO_LAB_ROOT must exactly equal the allowlisted lab UNC from photo-lab.local.json or PHOTO_LAB_ALLOWED_ROOT.'
     }
 
-    Assert-SafeLabUnc -Path $env:QNAP_LAB_ROOT
-    return $env:QNAP_LAB_ROOT
+    Assert-SafeLabUnc -Path $env:PHOTO_LAB_ROOT
+    return $env:PHOTO_LAB_ROOT
 }
 
 function Assert-LabChild {
@@ -185,7 +185,7 @@ try {
     if ($Mode -eq 'Local') {
         # Local mode never contacts the lab UNC and does not require lab
         # credentials or an allowlist setting.
-        $artifactRoot = Join-Path ([IO.Path]::GetTempPath()) "qnap-lab-local-$([guid]::NewGuid().ToString('N'))"
+        $artifactRoot = Join-Path ([IO.Path]::GetTempPath()) "photo-lab-local-$([guid]::NewGuid().ToString('N'))"
         New-Item -Path $artifactRoot -ItemType Directory -Force | Out-Null
         $cleanup = $true
         & $workflowTests
@@ -267,29 +267,29 @@ try {
         return
     }
 
-    if ($env:QNAP_LAB_GOLDEN -cne '1') {
-        throw 'Golden corpus mode requires QNAP_LAB_GOLDEN=1 explicitly.'
+    if ($env:PHOTO_LAB_GOLDEN -cne '1') {
+        throw 'Golden corpus mode requires PHOTO_LAB_GOLDEN=1 explicitly.'
     }
-    if ([string]::IsNullOrEmpty($env:QNAP_LAB_GOLDEN_PATH)) {
-        throw 'Golden corpus mode requires QNAP_LAB_GOLDEN_PATH explicitly.'
+    if ([string]::IsNullOrEmpty($env:PHOTO_LAB_GOLDEN_PATH)) {
+        throw 'Golden corpus mode requires PHOTO_LAB_GOLDEN_PATH explicitly.'
     }
-    Assert-LabChild -Path $env:QNAP_LAB_GOLDEN_PATH -Root $labRoot
-    if (-not (Test-Path -LiteralPath $env:QNAP_LAB_GOLDEN_PATH -PathType Container)) {
-        throw "Golden corpus path does not exist: $($env:QNAP_LAB_GOLDEN_PATH)"
+    Assert-LabChild -Path $env:PHOTO_LAB_GOLDEN_PATH -Root $labRoot
+    if (-not (Test-Path -LiteralPath $env:PHOTO_LAB_GOLDEN_PATH -PathType Container)) {
+        throw "Golden corpus path does not exist: $($env:PHOTO_LAB_GOLDEN_PATH)"
     }
-    if ($env:QNAP_LAB_GOLDEN_MANIFEST -and $env:QNAP_LAB_GOLDEN_CLASSIFIED -and $env:QNAP_LAB_GOLDEN_DATES) {
+    if ($env:PHOTO_LAB_GOLDEN_MANIFEST -and $env:PHOTO_LAB_GOLDEN_CLASSIFIED -and $env:PHOTO_LAB_GOLDEN_DATES) {
         & (Join-Path $PSScriptRoot 'validate-golden-corpus.ps1') `
-            -ManifestPath $env:QNAP_LAB_GOLDEN_MANIFEST `
-            -ClassifiedPath $env:QNAP_LAB_GOLDEN_CLASSIFIED `
-            -DateReviewPath $env:QNAP_LAB_GOLDEN_DATES
+            -ManifestPath $env:PHOTO_LAB_GOLDEN_MANIFEST `
+            -ClassifiedPath $env:PHOTO_LAB_GOLDEN_CLASSIFIED `
+            -DateReviewPath $env:PHOTO_LAB_GOLDEN_DATES
         if ($LASTEXITCODE -ne 0) {
             throw "Golden corpus validation failed with exit code $LASTEXITCODE."
         }
     }
     else {
-        throw 'Golden corpus mode requires QNAP_LAB_GOLDEN_MANIFEST, QNAP_LAB_GOLDEN_CLASSIFIED, and QNAP_LAB_GOLDEN_DATES.'
+        throw 'Golden corpus mode requires PHOTO_LAB_GOLDEN_MANIFEST, PHOTO_LAB_GOLDEN_CLASSIFIED, and PHOTO_LAB_GOLDEN_DATES.'
     }
-    Write-Result -ModeName $Mode -Status 'passed' -Detail 'Explicitly enabled golden corpus validation completed.' -ArtifactRoot $env:QNAP_LAB_GOLDEN_PATH
+    Write-Result -ModeName $Mode -Status 'passed' -Detail 'Explicitly enabled golden corpus validation completed.' -ArtifactRoot $env:PHOTO_LAB_GOLDEN_PATH
 }
 finally {
     if ($cleanup -and -not $KeepArtifacts -and $artifactRoot -and (Test-Path -LiteralPath $artifactRoot)) {
