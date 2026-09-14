@@ -170,6 +170,9 @@ $isUnc = $effectiveScanRoot.StartsWith('\\')
 if (-not $isUnc -and -not $AllowLocalRoot) {
     throw "The scan root must be a UNC path such as \\server\share\Photos, or pass -AllowLocalRoot for a local fixture. Received: $effectiveScanRoot"
 }
+if (-not $isUnc -and $effectiveScanRoot -match '^[A-Za-z]:[\\/]?$') {
+    throw "A drive root such as C:\ is not a valid scan root. Choose a folder on that drive. Received: $effectiveScanRoot"
+}
 if ($isUnc -and $effectiveScanRoot -notmatch '^\\\\[^\\]+\\[^\\]+') {
     throw "The UNC scan root must be a share path such as \\server\share or \\server\share\Photos. Received: $effectiveScanRoot"
 }

@@ -50,9 +50,9 @@ procedure, not by copying an arbitrary executable into the publish directory.
 
 ## Safe operation
 
-1. Confirm the QNAP share is reachable and use a UNC scan root such as
-   `\\server\photos`. Do not use a mapped drive letter for production
-   automation.
+1. Confirm the photo folder is reachable. Use a UNC scan root such as
+   `\\server\photos`, or a local folder such as `D:\Photos`. Do not use a
+   drive root or a mapped network letter for a NAS (use UNC instead).
 2. Set an artifact root on a local, user-writable disk. Artifacts are evidence
    and should not be placed inside the source photo tree.
 3. Run a read-only scan and inspect the generated raw, normalized, classified,

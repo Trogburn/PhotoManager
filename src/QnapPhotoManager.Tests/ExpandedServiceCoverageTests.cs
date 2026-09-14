@@ -385,14 +385,14 @@ public sealed class DateRepairServiceCoverageTests : TestBase
     }
 
     [Fact]
-    public async Task ScanRejectsNonUncRootsBeforeInvokingPowerShell()
+    public async Task ScanRejectsDriveRootsBeforeInvokingPowerShell()
     {
         var root = NewTempDirectory();
         try
         {
             var service = new DateRepairService(new PathPolicy(root));
             await Assert.ThrowsAsync<ArgumentException>(() =>
-                service.ScanAsync(@"C:\photos", "artifacts"));
+                service.ScanAsync(@"C:\", "artifacts"));
         }
         finally { Delete(root); }
     }

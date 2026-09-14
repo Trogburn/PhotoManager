@@ -9,15 +9,23 @@ namespace QnapPhotoManager.Tests;
 public sealed class SafetyContractTests
 {
     [Theory]
-    [InlineData(@"C:\Photos")]
     [InlineData("")]
     [InlineData("   ")]
-    public void ProductionScanRootRejectsNonUncPaths(string value) =>
+    [InlineData("photos")]
+    [InlineData(@"C:")]
+    [InlineData(@"C:\")]
+    [InlineData(@"D:\")]
+    [InlineData(@"\\server")]
+    public void ProductionScanRootRejectsEmptyDriveRootAndIncompleteUnc(string value) =>
         Xunit.Assert.Throws<ArgumentException>(() => PathPolicy.ValidateScanRoot(value));
 
     [Fact]
     public void ProductionScanRootAcceptsUncChild() =>
         PathPolicy.ValidateScanRoot(@"\\server\share\photos");
+
+    [Fact]
+    public void ProductionScanRootAcceptsLocalFolder() =>
+        PathPolicy.ValidateScanRoot(@"C:\Photos");
 
     [Fact]
     public async Task ArtifactStoreRejectsMissingAndTamperedArtifacts()

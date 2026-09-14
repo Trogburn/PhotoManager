@@ -218,20 +218,39 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void StartDateWorkRejectsLocalScanRoot()
+    public void StartDateWorkRejectsDriveRoot()
     {
         var root = NewTempDirectory();
         try
         {
             var viewModel = CreateViewModel(root);
-            viewModel.ScanRoot = @"C:\local-test-fixture";
+            viewModel.ScanRoot = @"C:\";
             viewModel.StartDateWorkCommand.Execute(null);
             Assert.True(SpinWait.SpinUntil(
-                () => viewModel.StatusMessage.Contains("UNC", StringComparison.OrdinalIgnoreCase),
+                () => viewModel.StatusMessage.Contains("drive root", StringComparison.OrdinalIgnoreCase),
                 TimeSpan.FromSeconds(3)));
 
             Assert.Equal(WorkflowPage.Configuration, viewModel.CurrentPage);
             Assert.Equal("Idle", viewModel.WorkflowState);
+        }
+        finally { Delete(root); }
+    }
+
+    [Fact]
+    public void StartDateWorkAcceptsLocalFolder()
+    {
+        var root = NewTempDirectory();
+        try
+        {
+            var photos = Path.Combine(root, "photos");
+            Directory.CreateDirectory(photos);
+            var viewModel = CreateViewModel(root);
+            viewModel.ScanRoot = photos;
+            viewModel.StartDateWorkCommand.Execute(null);
+            Assert.True(SpinWait.SpinUntil(
+                () => viewModel.CurrentPage == WorkflowPage.DateWork,
+                TimeSpan.FromSeconds(3)));
+            Assert.Equal("Configured", viewModel.WorkflowState);
         }
         finally { Delete(root); }
     }

@@ -89,7 +89,11 @@ public sealed class DuplicateWorkflowService
 
         workflow.TransitionTo(WorkflowState.Scanning, "Starting read-only Czkawka scan.");
         var started = DateTime.UtcNow;
-        await RunScriptAsync("scan.ps1", Args(("-ScanRoot", config.ScanRoot), ("-ConfigPath", ConfigPath()), fresh ? ("-Fresh", null) : null), cancellationToken);
+        await RunScriptAsync("scan.ps1", Args(
+            ("-ScanRoot", config.ScanRoot),
+            ("-ConfigPath", ConfigPath()),
+            fresh ? ("-Fresh", null) : null,
+            AllowLocalRootArg(config.ScanRoot)), cancellationToken);
         var scanDirectory = FindNewestScanDirectory(started);
 
         var normalized = Path.Combine(scanDirectory, "normalized", "combined.normalized.json");
@@ -301,6 +305,7 @@ public sealed class DuplicateWorkflowService
                 ("-QuarantineRoot", config.QuarantineRoot),
                 ("-ConfigPath", ConfigPath()),
                 ("-OutputDirectory", outputDirectory),
+                AllowLocalRootArg(config.ScanRoot),
                 null).Where(argument => argument is not null).Select(argument => argument!),
             _repositoryRoot,
             cancellationToken);
@@ -691,6 +696,9 @@ public sealed class DuplicateWorkflowService
         foreach (var path in new[] { artifacts.NormalizedPath, artifacts.ClassifiedPath, artifacts.DecisionPath, artifacts.ReviewJsonPath })
             if (!File.Exists(path)) throw new InvalidOperationException($"Required workflow artifact is missing: {path}");
     }
+    private static (string? Name, string? Value)? AllowLocalRootArg(string scanRoot) =>
+        PathPolicy.RequiresAllowLocalRoot(scanRoot) ? ("-AllowLocalRoot", null) : null;
+
     private static IEnumerable<string?> Args(params (string? Name, string? Value)?[] values)
     {
         foreach (var item in values)

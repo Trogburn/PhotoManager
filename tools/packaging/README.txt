@@ -22,7 +22,8 @@ For the full first-use walkthrough, open GETTING_STARTED.md in this zip.
 
 First use
 ---------
-1. Enter a UNC photo folder (\\server\share\Photos), not a mapped drive.
+1. Enter a UNC folder (\\server\share\Photos) or a local folder (D:\Photos).
+   Do not use a drive root or a mapped network letter.
 2. Enter a quarantine folder that is outside that photo tree.
 3. Keep the artifact folder on this PC (the default "artifacts" folder next
    to the app is fine).

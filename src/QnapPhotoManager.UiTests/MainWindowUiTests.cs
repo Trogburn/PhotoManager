@@ -48,11 +48,11 @@ public sealed class MainWindowUiTests
                 ?? throw new InvalidOperationException("The application did not expose a main window.");
 
             var scanRoot = Find(window, "ScanRootTextBox").AsTextBox();
-            scanRoot.Text = @"C:\local-test-fixture";
+            scanRoot.Text = @"C:\";
             Find(window, "ConfigureDuplicatesButton").AsButton().Invoke();
 
             var status = Find(window, "StatusMessageText");
-            Assert.Contains("UNC", status.Name, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("drive root", status.Name, StringComparison.OrdinalIgnoreCase);
             Assert.Equal("Idle", Find(window, "WorkflowStateText").Name);
         }
         finally
@@ -102,11 +102,11 @@ public sealed class MainWindowUiTests
             var window = app.GetMainWindow(automation)
                 ?? throw new InvalidOperationException("The application did not expose a main window.");
 
-            Find(window, "ScanRootTextBox").AsTextBox().Text = @"C:\local-test-fixture";
+            Find(window, "ScanRootTextBox").AsTextBox().Text = @"C:\";
             Find(window, "StartDateWorkButton").AsButton().Invoke();
 
             Assert.True(SpinWait.SpinUntil(
-                () => Find(window, "StatusMessageText").Name.Contains("UNC", StringComparison.OrdinalIgnoreCase),
+                () => Find(window, "StatusMessageText").Name.Contains("drive root", StringComparison.OrdinalIgnoreCase),
                 TimeSpan.FromSeconds(3)));
             Assert.Equal("Idle", Find(window, "WorkflowStateText").Name);
             Assert.False(Find(window, "ConfigurationPage").IsOffscreen);
