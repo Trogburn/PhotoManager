@@ -1,7 +1,7 @@
 # QnapServerManagement
 Utilities for managing a Qnap Server that contains mostly Videos and Audio in a Plex server, along with Photo and Video backup.
 
-Windows users who only want the photo app can download `QnapPhotoManager-*-win-x64.zip` from a GitHub Release, extract it, and run `Install.bat`. That install does not require this repository. macOS is not supported. See [src/QnapPhotoManager/OPERATIONS.md](src/QnapPhotoManager/OPERATIONS.md).
+Windows users who only want the photo app can download `QnapPhotoManager-*-win-x64.zip` from a GitHub Release, extract it, and follow [tools/packaging/GETTING_STARTED.md](tools/packaging/GETTING_STARTED.md) (also inside the zip). That install does not require this repository. macOS is not supported. Developer rebuild and upgrade notes are in [src/QnapPhotoManager/OPERATIONS.md](src/QnapPhotoManager/OPERATIONS.md).
 
 For a beginner-focused, copy-paste operating guide, see [USER_GUIDE.md](USER_GUIDE.md). The recommended one-command workflow is `tools/czkawka/run-workflow.ps1`; it scans, normalizes, classifies, and opens the reviewer without moving files.
 

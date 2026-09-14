@@ -20,10 +20,12 @@ Requirements:
 - Windows PowerShell (used to launch the bundled workflow scripts).
 
 Download `QnapPhotoManager-*-win-x64.zip` from the GitHub Release (or the
-Package Windows workflow artifact). Extract it, then double-click
-`Install.bat`. That copies the app to `%LOCALAPPDATA%\QnapPhotoManager` and
-creates a Start Menu shortcut. No administrator rights are required. The zip
-already includes a self-contained .NET runtime and the pinned Czkawka CLI.
+Package Windows workflow artifact). Extract it, then follow
+[GETTING_STARTED.md](../../tools/packaging/GETTING_STARTED.md) (also inside
+the zip). Double-click `Install.bat`. That copies the app to
+`%LOCALAPPDATA%\QnapPhotoManager` and creates a Start Menu shortcut. No
+administrator rights are required. The zip already includes a self-contained
+.NET runtime and the pinned Czkawka CLI.
 
 To rebuild the zip from source:
 

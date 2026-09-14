@@ -18,6 +18,8 @@ Install
 You can also run QnapPhotoManager.exe from the extracted folder without
 installing.
 
+For the full first-use walkthrough, open GETTING_STARTED.md in this zip.
+
 First use
 ---------
 1. Enter a UNC photo folder (\\server\share\Photos), not a mapped drive.

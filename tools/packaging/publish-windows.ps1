@@ -57,6 +57,7 @@ if ($LASTEXITCODE -ne 0) {
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Install-QnapPhotoManager.ps1') -Destination $stage -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Install.bat') -Destination $stage -Force
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'README.txt') -Destination $stage -Force
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'GETTING_STARTED.md') -Destination $stage -Force
 
 $required = @(
     'QnapPhotoManager.exe',
@@ -67,7 +68,8 @@ $required = @(
     'tools\czkawka\bin\czkawka_cli.exe',
     'Install.bat',
     'Install-QnapPhotoManager.ps1',
-    'README.txt'
+    'README.txt',
+    'GETTING_STARTED.md'
 )
 foreach ($relative in $required) {
     $path = Join-Path $stage $relative
