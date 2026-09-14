@@ -9,13 +9,17 @@ Network and golden-corpus modes have two mandatory gates:
 
 ```powershell
 $env:QNAP_LAB_TESTS = '1'
-$env:QNAP_LAB_ROOT = '\\TrogQNAP6HDD\PhotoWorkflowTest'
+$env:QNAP_LAB_ROOT = '\\NAS\DisposableLabShare'
 ```
 
-`QNAP_LAB_ROOT` is an exact, case-sensitive allowlist value. Drive roots,
-parent paths, and production-like paths are rejected. Network mode creates one
-new GUID-named child beneath that root, and every fixture, quarantine,
-verification artifact, and transaction is confined to that child.
+Copy `qnap-lab.local.json.example` to gitignored `qnap-lab.local.json` and set
+`allowedLabRoot` to that same disposable UNC (or set `QNAP_LAB_ALLOWED_ROOT`).
+Run `apply-local-env.ps1` once so `QNAP_LAB_TESTS`, `QNAP_LAB_ROOT`, and
+`QNAP_LAB_ALLOWED_ROOT` persist for your Windows user.
+`QNAP_LAB_ROOT` must match the allowlist exactly when one is present. Drive
+roots, parent paths, and production-like paths are rejected. Network mode
+creates one new GUID-named child beneath that root, and every fixture,
+quarantine, verification artifact, and transaction is confined to that child.
 
 ## Safe local validation
 
@@ -31,7 +35,7 @@ network share or production media.
 
 ## Explicit network validation
 
-Only run this against the disposable allowlisted lab share. This is the exact
+Only run this against a disposable allowlisted lab share. This is the exact
 opt-in command; do not run it unless the share is available and disposable:
 
 ```powershell
@@ -57,7 +61,7 @@ artifacts. The corpus path must be a child of the exact lab root:
 
 ```powershell
 $env:QNAP_LAB_GOLDEN = '1'
-$env:QNAP_LAB_GOLDEN_PATH = '\\TrogQNAP6HDD\PhotoWorkflowTest\golden-v1'
+$env:QNAP_LAB_GOLDEN_PATH = '\\NAS\DisposableLabShare\golden-v1'
 $env:QNAP_LAB_GOLDEN_MANIFEST = 'C:\lab\manifest.json'
 $env:QNAP_LAB_GOLDEN_CLASSIFIED = 'C:\lab\classified.json'
 $env:QNAP_LAB_GOLDEN_DATES = 'C:\lab\dates.json'

@@ -41,6 +41,7 @@ if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
 }
 . (Join-Path $PSScriptRoot 'common-hash.ps1')
 . (Join-Path $PSScriptRoot 'common-scan-id.ps1')
+. (Join-Path $PSScriptRoot 'common-config.ps1')
 
 function Get-Value {
     param([object]$Value, [string]$Name)
@@ -116,7 +117,7 @@ function Add-Transaction {
 }
 
 if (-not (Test-Path -LiteralPath $DecisionPath)) { throw "Decision file not found: $DecisionPath" }
-$config = if (Test-Path -LiteralPath $ConfigPath) { Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json } else { $null }
+$config = if (Test-Path -LiteralPath $ConfigPath) { Get-CzkawkaConfig -ConfigPath $ConfigPath } else { $null }
 $protectedPaths = if ($null -ne $config) { @($config.scan.protectedPaths) } else { @() }
 $excludedPaths = if ($null -ne $config) { @($config.scan.excludedPaths) } else { @() }
 $decisions = @((Get-Content -LiteralPath $DecisionPath -Raw | ConvertFrom-Json) | Write-Output)

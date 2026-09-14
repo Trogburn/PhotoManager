@@ -17,6 +17,7 @@ if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
 }
 . (Join-Path $PSScriptRoot 'common-hash.ps1')
 . (Join-Path $PSScriptRoot 'common-scan-id.ps1')
+. (Join-Path $PSScriptRoot 'common-config.ps1')
 
 function Get-Value { param([object]$Object, [string]$Name) if ($null -eq $Object -or $null -eq $Object.PSObject.Properties[$Name]) { return $null }; $Object.PSObject.Properties[$Name].Value }
 function Get-JsonArray { param([string]$Path) return @((Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json) | Write-Output) }
@@ -46,7 +47,7 @@ $undoneSources = @{}
 foreach ($entry in @($latestBySource.Values | Where-Object { $_.status -eq 'undone' })) {
     $undoneSources[[string]$entry.source] = $true
 }
-$config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
+$config = Get-CzkawkaConfig -ConfigPath $ConfigPath
 $expected = @{}
 $keepers = @{}
 $deferred = @{}

@@ -1,6 +1,8 @@
 # QnapServerManagement
 Utilities for managing a Qnap Server that contains mostly Videos and Audio in a Plex server, along with Photo and Video backup.
 
+Windows users who only want the photo app can download `QnapPhotoManager-*-win-x64.zip` from a GitHub Release, extract it, and follow [tools/packaging/GETTING_STARTED.md](tools/packaging/GETTING_STARTED.md) (also inside the zip). That install does not require this repository. macOS is not supported. Developer rebuild and upgrade notes are in [src/QnapPhotoManager/OPERATIONS.md](src/QnapPhotoManager/OPERATIONS.md).
+
 For a beginner-focused, copy-paste operating guide, see [USER_GUIDE.md](USER_GUIDE.md). The recommended one-command workflow is `tools/czkawka/run-workflow.ps1`; it scans, normalizes, classifies, and opens the reviewer without moving files.
 
 ## Phase 1: Czkawka CLI foundation
@@ -10,6 +12,7 @@ This repository now includes a pinned Windows installation and read-only scan wo
 ### Included files
 - `tools/czkawka/install.ps1` - Downloads and verifies a pinned Czkawka CLI release before installing it locally.
 - `tools/czkawka/config.json` - Stores the executable path, local report root, UNC scan root, protected/excluded paths, and scan defaults.
+- `tools/czkawka/config.local.json.example` - Template for a gitignored `config.local.json` overlay with machine-specific UNC paths.
 - `tools/czkawka/scan.ps1` - Validates the UNC root, runs the exact-duplicate and image scans in read-only mode, and preserves raw JSON plus metadata.
 - `tools/czkawka/parse-results.ps1` - Converts supported Czkawka result JSON into a versioned normalized document while retaining the raw input path.
 - `tools/czkawka/tests/phase2-smoke.ps1` - Runs a deterministic grouped-result parser smoke test.

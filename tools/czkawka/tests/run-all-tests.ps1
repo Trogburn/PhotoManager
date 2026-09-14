@@ -6,6 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $testRoot = $PSScriptRoot
 $tests = @(
+    'local-config-tests.ps1',
     'phase1-tests.ps1',
     'phase2-smoke.ps1',
     'phase2-tests.ps1',
@@ -22,7 +23,11 @@ $tests = @(
 foreach ($test in $tests) {
     $path = Join-Path $testRoot $test
     Write-Host "Running $test"
+    $global:LASTEXITCODE = 0
     & $path
+    if (-not $?) {
+        throw "$test failed."
+    }
     if ($LASTEXITCODE -ne 0) {
         throw "$test failed with exit code $LASTEXITCODE."
     }

@@ -1,0 +1,35 @@
+name: Package Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  windows-zip:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET environment
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build Windows zip
+        shell: pwsh
+        run: .\tools\packaging\publish-windows.ps1
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: qnap-photo-manager-win-x64
+          path: dist/QnapPhotoManager-*-win-x64.zip
+
+      - name: Attach zip to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/QnapPhotoManager-*-win-x64.zip

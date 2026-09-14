@@ -1,0 +1,6 @@
+{
+  "scan": {
+    "uncRoot": "\\\\NAS\\DisposableLabShare\\WpfAcceptance\\Input",
+    "quarantineRoot": "\\\\NAS\\DisposableLabShare\\WpfAcceptance\\Quarantine"
+  }
+}

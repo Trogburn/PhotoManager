@@ -13,9 +13,9 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
     private readonly WorkflowStateMachine _workflow;
     private readonly AtomicArtifactStore _artifactStore;
     private readonly IConfirmationService _confirmationService;
-    private string _scanRoot = @"\\TrogQNAP6HDD\PhotoWorkflowTest\WpfAcceptance\Input";
+    private string _scanRoot = @"\\SERVER\Share\Photos";
     private string _artifactRoot = "artifacts";
-    private string _quarantineRoot = @"\\TrogQNAP6HDD\PhotoWorkflowTest\WpfAcceptance\Quarantine";
+    private string _quarantineRoot = @"\\SERVER\Share\PhotoQuarantine";
     private string _statusMessage = "Ready to configure a session.";
     private WorkflowPage _currentPage = WorkflowPage.Configuration;
 
@@ -24,11 +24,13 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
         AtomicArtifactStore artifactStore,
         DateRepairService dateRepairService,
         DuplicateWorkflowService duplicateWorkflow,
-        IConfirmationService confirmationService)
+        IConfirmationService confirmationService,
+        LocalDefaults? localDefaults = null)
     {
         _workflow = workflow ?? throw new ArgumentNullException(nameof(workflow));
         _artifactStore = artifactStore ?? throw new ArgumentNullException(nameof(artifactStore));
         _confirmationService = confirmationService ?? throw new ArgumentNullException(nameof(confirmationService));
+        ApplyLocalDefaults(localDefaults);
         DateWork = new DateWorkflowViewModel(dateRepairService, this);
         DuplicateWork = new DuplicateWorkflowViewModel(duplicateWorkflow, this);
         DateWork.PropertyChanged += ForwardChildPropertyChanged;
@@ -300,6 +302,29 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
         StatusMessage = "Ready to configure a session.";
         ((IShellWorkflowHost)this).RefreshSession();
         ((IShellWorkflowHost)this).RaiseCommandStates();
+    }
+
+    private void ApplyLocalDefaults(LocalDefaults? localDefaults)
+    {
+        if (localDefaults is null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(localDefaults.ScanRoot))
+        {
+            _scanRoot = localDefaults.ScanRoot;
+        }
+
+        if (!string.IsNullOrWhiteSpace(localDefaults.QuarantineRoot))
+        {
+            _quarantineRoot = localDefaults.QuarantineRoot;
+        }
+
+        if (!string.IsNullOrWhiteSpace(localDefaults.ArtifactRoot))
+        {
+            _artifactRoot = localDefaults.ArtifactRoot;
+        }
     }
 
     private void ForwardChildPropertyChanged(object? sender, PropertyChangedEventArgs e)
