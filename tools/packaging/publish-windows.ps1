@@ -84,6 +84,9 @@ if (Test-Path -LiteralPath $zipPath) {
 }
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal
 
+. (Join-Path $PSScriptRoot 'Test-PackagedZip.ps1')
+Test-PackagedZipEntries -ZipPath $zipPath -Required $required
+
 Write-Host "Packaged $zipPath"
 [pscustomobject]@{
     Version = $version

@@ -34,4 +34,15 @@ foreach ($test in $tests) {
     }
 }
 
+$zipSmoke = Join-Path $testRoot '..\..\packaging\tests\zip-smoke.ps1'
+Write-Host 'Running zip-smoke.ps1'
+$global:LASTEXITCODE = 0
+& $zipSmoke
+if (-not $?) {
+    throw 'zip-smoke.ps1 failed.'
+}
+if ($LASTEXITCODE -ne 0) {
+    throw "zip-smoke.ps1 failed with exit code $LASTEXITCODE."
+}
+
 Write-Host 'All phase validation tests passed.'
