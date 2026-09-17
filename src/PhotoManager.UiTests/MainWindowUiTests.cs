@@ -28,7 +28,38 @@ public sealed class MainWindowUiTests
                 condition.ByAutomationId("DateWorkPage")));
             Assert.True(Find(window, "StartDateWorkButton").IsEnabled);
             Assert.False(Find(window, "ContinueDateWorkButton").IsEnabled);
+            Assert.True(Find(window, "StartRotateWorkButton").IsEnabled);
+            Assert.False(Find(window, "ContinueRotateWorkButton").IsEnabled);
             Assert.True(Find(window, "ConfigureDuplicatesButton").IsEnabled);
+        }
+        finally
+        {
+            app.Kill();
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "UI")]
+    public void Configuration_can_open_rotate_work_without_duplicate_scan()
+    {
+        using var app = LaunchApplication();
+        try
+        {
+            using var automation = new UIA3Automation();
+            var window = app.GetMainWindow(automation)
+                ?? throw new InvalidOperationException("The application did not expose a main window.");
+
+            Find(window, "StartRotateWorkButton").AsButton().Invoke();
+            Assert.True(SpinWait.SpinUntil(
+                () => window.FindFirstDescendant(condition => condition.ByAutomationId("RotateWorkPage")) is not null,
+                TimeSpan.FromSeconds(3)));
+            Assert.NotNull(window.FindFirstDescendant(condition => condition.ByAutomationId("RotateWorkPage")));
+            Assert.Null(window.FindFirstDescendant(condition => condition.ByAutomationId("DuplicateWorkPage")));
+            Assert.Null(window.FindFirstDescendant(condition => condition.ByAutomationId("DateWorkPage")));
+            Assert.False(Find(window, "ApplyRotationsButton").IsEnabled);
+            Assert.False(Find(window, "CreateRotateSnapshotButton").IsEnabled);
+            Assert.True(Find(window, "ScanRotationsButton").IsEnabled);
+            Assert.False(Find(window, "OpenRotateUndoButton").IsEnabled);
         }
         finally
         {

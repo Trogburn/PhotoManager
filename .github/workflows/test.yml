@@ -20,6 +20,9 @@ jobs:
       - name: Run managed unit tests
         run: dotnet test .\PhotoManager.slnx -c Release --filter "Category!=UI" --collect:"XPlat Code Coverage"
 
+      - name: Run FlaUI desktop tests
+        run: dotnet test .\src\PhotoManager.UiTests\PhotoManager.UiTests.csproj -c Release --filter "Category=UI"
+
       - name: Run PowerShell workflow tests
         shell: pwsh
         run: .\tools\czkawka\tests\run-all-tests.ps1
