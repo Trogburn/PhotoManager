@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Windows;
 using System.Windows.Media;
 using PhotoManager.Infrastructure;
 using PhotoManager.Models;
@@ -30,6 +31,7 @@ public sealed class RotateWorkflowViewModel : ObservableObject
         ContinueRotateWorkCommand = new RelayCommand(ContinueRotateWork, CanContinueRotateWork);
         ScanRotationsCommand = new RelayCommand(ScanRotations, CanScanRotations);
         CreateRotateSnapshotCommand = new RelayCommand(CreateRotateSnapshot, CanCreateRotateSnapshot);
+        CopyRotateSnapshotNameCommand = new RelayCommand(CopyRotateSnapshotName, CanCopyRotateSnapshotName);
         ApplyRotationsCommand = new RelayCommand(ApplyRotations, CanApplyRotations);
         ApproveAllProposedCommand = new RelayCommand(ApproveAllProposed, CanApproveAllProposed);
         RotateSelectedClockwiseCommand = new RelayCommand(() => RotateSelected(6), () => CanRotateSelected(6));
@@ -45,6 +47,7 @@ public sealed class RotateWorkflowViewModel : ObservableObject
     public RelayCommand ContinueRotateWorkCommand { get; }
     public RelayCommand ScanRotationsCommand { get; }
     public RelayCommand CreateRotateSnapshotCommand { get; }
+    public RelayCommand CopyRotateSnapshotNameCommand { get; }
     public RelayCommand ApplyRotationsCommand { get; }
     public RelayCommand ApproveAllProposedCommand { get; }
     public RelayCommand RotateSelectedClockwiseCommand { get; }
@@ -131,6 +134,7 @@ public sealed class RotateWorkflowViewModel : ObservableObject
         ContinueRotateWorkCommand.RaiseCanExecuteChanged();
         ScanRotationsCommand.RaiseCanExecuteChanged();
         CreateRotateSnapshotCommand.RaiseCanExecuteChanged();
+        CopyRotateSnapshotNameCommand.RaiseCanExecuteChanged();
         ApplyRotationsCommand.RaiseCanExecuteChanged();
         ApproveAllProposedCommand.RaiseCanExecuteChanged();
         RotateSelectedClockwiseCommand.RaiseCanExecuteChanged();
@@ -165,7 +169,19 @@ public sealed class RotateWorkflowViewModel : ObservableObject
         _host.RaiseCommandStates();
     }
 
-    private async void StartRotateWork()
+    internal Task StartRotateWorkForTestsAsync() => StartRotateWorkAsync();
+
+    internal Task ScanRotationsForTestsAsync() => ScanRotationsAsync();
+
+    internal Task CreateRotateSnapshotForTestsAsync() => CreateRotateSnapshotAsync();
+
+    internal Task ApplyRotationsForTestsAsync() => ApplyRotationsAsync();
+
+    internal Task UndoSelectedForTestsAsync() => UndoSelectedAsync();
+
+    private async void StartRotateWork() => await StartRotateWorkAsync();
+
+    private async Task StartRotateWorkAsync()
     {
         try
         {
@@ -261,7 +277,9 @@ public sealed class RotateWorkflowViewModel : ObservableObject
         _host.RefreshSession();
     }
 
-    private async void CreateRotateSnapshot()
+    private async void CreateRotateSnapshot() => await CreateRotateSnapshotAsync();
+
+    private async Task CreateRotateSnapshotAsync()
     {
         try
         {
@@ -299,6 +317,7 @@ public sealed class RotateWorkflowViewModel : ObservableObject
             _host.SetStatus($"Snapshot created for {_snapshot.Items.Count} file(s). Check the confirmation box before apply.");
             OnPropertyChanged(nameof(RotateSnapshotName));
             OnPropertyChanged(nameof(CanConfirmRotateSnapshot));
+            CopyRotateSnapshotNameCommand.RaiseCanExecuteChanged();
             _host.RaiseCommandStates();
         }
         catch (Exception exception) when (exception is IOException or InvalidOperationException)
@@ -308,7 +327,9 @@ public sealed class RotateWorkflowViewModel : ObservableObject
         }
     }
 
-    private async void ApplyRotations()
+    private async void ApplyRotations() => await ApplyRotationsAsync();
+
+    private async Task ApplyRotationsAsync()
     {
         try
         {
@@ -362,7 +383,9 @@ public sealed class RotateWorkflowViewModel : ObservableObject
         }
     }
 
-    private async void UndoSelected()
+    private async void UndoSelected() => await UndoSelectedAsync();
+
+    private async Task UndoSelectedAsync()
     {
         try
         {
@@ -439,6 +462,20 @@ public sealed class RotateWorkflowViewModel : ObservableObject
         && _snapshot is null
         && !_applyCompleted
         && OrientationReviewDecisionPolicy.CanCreateSnapshot(RotateItems);
+
+    private void CopyRotateSnapshotName()
+    {
+        if (_snapshotName is null)
+        {
+            _host.SetStatus("Scan orientation to generate a snapshot name.");
+            return;
+        }
+
+        Clipboard.SetText(_snapshotName);
+        _host.SetStatus("Suggested snapshot name copied to the clipboard.");
+    }
+
+    private bool CanCopyRotateSnapshotName() => _snapshotName is not null;
 
     private bool CanApplyRotations() =>
         !_applyCompleted

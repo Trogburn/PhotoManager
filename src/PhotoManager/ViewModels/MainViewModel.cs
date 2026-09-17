@@ -110,6 +110,7 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
     public RelayCommand ContinueRotateWorkCommand => RotateWork.ContinueRotateWorkCommand;
     public RelayCommand ScanRotationsCommand => RotateWork.ScanRotationsCommand;
     public RelayCommand CreateRotateSnapshotCommand => RotateWork.CreateRotateSnapshotCommand;
+    public RelayCommand CopyRotateSnapshotNameCommand => RotateWork.CopyRotateSnapshotNameCommand;
     public RelayCommand ApplyRotationsCommand => RotateWork.ApplyRotationsCommand;
     public RelayCommand ApproveAllProposedRotationsCommand => RotateWork.ApproveAllProposedCommand;
     public RelayCommand RotateSelectedClockwiseCommand => RotateWork.RotateSelectedClockwiseCommand;
@@ -273,6 +274,16 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
 
     internal void MarkDateScanInProgressForTests() =>
         DateWork.MarkDateScanInProgressForTests();
+
+    internal Task StartRotateWorkForTestsAsync() => RotateWork.StartRotateWorkForTestsAsync();
+
+    internal Task ScanRotationsForTestsAsync() => RotateWork.ScanRotationsForTestsAsync();
+
+    internal Task CreateRotateSnapshotForTestsAsync() => RotateWork.CreateRotateSnapshotForTestsAsync();
+
+    internal Task ApplyRotationsForTestsAsync() => RotateWork.ApplyRotationsForTestsAsync();
+
+    internal Task UndoSelectedForTestsAsync() => RotateWork.UndoSelectedForTestsAsync();
 
     internal void LoadRotateReviewForTests(OrientationReviewReport report, string reportPath = "orientation-review.json") =>
         RotateWork.LoadRotateReviewForTests(report, reportPath);

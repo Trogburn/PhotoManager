@@ -449,22 +449,32 @@
                     <RowDefinition Height="*" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
-                <WrapPanel>
-                    <Button AutomationProperties.AutomationId="ScanRotationsButton"
-                            Command="{Binding ScanRotationsCommand}" Content="Scan" />
-                    <Button AutomationProperties.AutomationId="ApproveAllProposedRotationsButton"
-                            Margin="8,0,0,0" Command="{Binding ApproveAllProposedRotationsCommand}" Content="Approve all proposed" />
-                    <Button AutomationProperties.AutomationId="CreateRotateSnapshotButton"
-                            Margin="8,0,0,0" Command="{Binding CreateRotateSnapshotCommand}" Content="Snapshot" />
-                    <CheckBox AutomationProperties.AutomationId="RotateSnapshotConfirmedCheckBox"
-                              Margin="14,4,0,0"
-                              IsEnabled="{Binding CanConfirmRotateSnapshot}"
-                              IsChecked="{Binding RotateSnapshotConfirmed}" Content="Confirm snapshot before rotate" />
-                    <Button AutomationProperties.AutomationId="ApplyRotationsButton"
-                            Margin="14,0,0,0" Command="{Binding ApplyRotationsCommand}" Content="Apply rotations" />
-                    <Button AutomationProperties.AutomationId="OpenRotateUndoButton"
-                            Margin="8,0,0,0" Command="{Binding OpenRotateUndoCommand}" Content="Undo applied rotations" />
-                </WrapPanel>
+                <StackPanel>
+                    <WrapPanel>
+                        <Button AutomationProperties.AutomationId="ScanRotationsButton"
+                                Command="{Binding ScanRotationsCommand}" Content="Scan" />
+                        <Button AutomationProperties.AutomationId="ApproveAllProposedRotationsButton"
+                                Margin="8,0,0,0" Command="{Binding ApproveAllProposedRotationsCommand}" Content="Approve all proposed" />
+                        <Button AutomationProperties.AutomationId="CreateRotateSnapshotButton"
+                                Margin="8,0,0,0" Command="{Binding CreateRotateSnapshotCommand}" Content="Snapshot" />
+                        <CheckBox AutomationProperties.AutomationId="RotateSnapshotConfirmedCheckBox"
+                                  Margin="14,4,0,0"
+                                  IsEnabled="{Binding CanConfirmRotateSnapshot}"
+                                  IsChecked="{Binding RotateSnapshotConfirmed}" Content="Confirm snapshot before rotate" />
+                        <Button AutomationProperties.AutomationId="ApplyRotationsButton"
+                                Margin="14,0,0,0" Command="{Binding ApplyRotationsCommand}" Content="Apply rotations" />
+                        <Button AutomationProperties.AutomationId="OpenRotateUndoButton"
+                                Margin="8,0,0,0" Command="{Binding OpenRotateUndoCommand}" Content="Undo applied rotations" />
+                    </WrapPanel>
+                    <DockPanel Margin="0,12,0,0">
+                        <Button DockPanel.Dock="Right" Margin="8,0,0,0"
+                                AutomationProperties.AutomationId="CopyRotateSnapshotNameButton"
+                                Command="{Binding CopyRotateSnapshotNameCommand}" Content="Copy" />
+                        <TextBox IsReadOnly="True" AutomationProperties.AutomationId="RotateSnapshotNameTextBox"
+                                 FontFamily="Consolas" FontSize="14"
+                                 Text="{Binding RotateSnapshotName, Mode=OneWay}" />
+                    </DockPanel>
+                </StackPanel>
                 <Grid Grid.Row="1" Margin="0,8,0,8">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="1.35*" />
@@ -586,7 +596,6 @@
                 </Grid>
                 <StackPanel Grid.Row="2">
                     <TextBlock Text="{Binding RotateSummary}" />
-                    <TextBlock Foreground="Gray" Text="{Binding RotateSnapshotName}" TextTrimming="CharacterEllipsis" />
                     <TextBlock Foreground="Gray" Text="{Binding RotateReportPath}" TextTrimming="CharacterEllipsis" />
                     <TextBlock Margin="0,4,0,0" Foreground="Gray" TextWrapping="Wrap"
                                Text="Apply copies the original to a local backup, then bakes the proposed rotation into the pixels. JPEG is re-encoded. Undo restores the backup, not an inverse rotate. If EXIF says Normal but the preview is still sideways, use the rotate buttons." />
