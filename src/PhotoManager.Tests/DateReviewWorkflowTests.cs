@@ -175,17 +175,13 @@ public sealed class DateReviewDecisionPolicyTests
 public sealed class MainViewModelDateWorkflowTests : TestBase
 {
     [Fact]
-    public void StartDateWorkMovesToDatePageWithoutDuplicateArtifacts()
+    public async Task StartDateWorkMovesToDatePageWithoutDuplicateArtifacts()
     {
         var root = NewTempDirectory();
         try
         {
             var viewModel = CreateViewModel(root);
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DateWork,
-                TimeSpan.FromSeconds(3)));
-
+            await viewModel.StartDateWorkForTestsAsync();
             Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
             Assert.Equal(WorkflowState.Configured, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
             Assert.Contains("No duplicate workflow artifacts", viewModel.DuplicateArtifactSummary);
@@ -197,16 +193,14 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void DateScanLocksWhileInProgressAndReportsInTheFooter()
+    public async Task DateScanLocksWhileInProgressAndReportsInTheFooter()
     {
         var root = NewTempDirectory();
         try
         {
             var viewModel = CreateViewModel(root);
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DateWork,
-                TimeSpan.FromSeconds(3)));
+            await viewModel.StartDateWorkForTestsAsync();
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
 
             Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
             viewModel.MarkDateScanInProgressForTests();
@@ -218,17 +212,15 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void StartDateWorkRejectsDriveRoot()
+    public async Task StartDateWorkRejectsDriveRoot()
     {
         var root = NewTempDirectory();
         try
         {
             var viewModel = CreateViewModel(root);
             viewModel.ScanRoot = @"C:\";
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.StatusMessage.Contains("drive root", StringComparison.OrdinalIgnoreCase),
-                TimeSpan.FromSeconds(3)));
+            await viewModel.StartDateWorkForTestsAsync();
+            Assert.Contains("drive root", viewModel.StatusMessage, StringComparison.OrdinalIgnoreCase);
 
             Assert.Equal(WorkflowPage.Configuration, viewModel.CurrentPage);
             Assert.Equal("Idle", viewModel.WorkflowState);
@@ -237,7 +229,7 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void StartDateWorkAcceptsLocalFolder()
+    public async Task StartDateWorkAcceptsLocalFolder()
     {
         var root = NewTempDirectory();
         try
@@ -246,26 +238,22 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
             Directory.CreateDirectory(photos);
             var viewModel = CreateViewModel(root);
             viewModel.ScanRoot = photos;
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DateWork,
-                TimeSpan.FromSeconds(3)));
+            await viewModel.StartDateWorkForTestsAsync();
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
             Assert.Equal("Configured", viewModel.WorkflowState);
         }
         finally { Delete(root); }
     }
 
     [Fact]
-    public void ResetReturnsToConfigurationAndClearsDateReview()
+    public async Task ResetReturnsToConfigurationAndClearsDateReview()
     {
         var root = NewTempDirectory();
         try
         {
             var viewModel = CreateViewModel(root);
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DateWork,
-                TimeSpan.FromSeconds(3)));
+            await viewModel.StartDateWorkForTestsAsync();
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
             viewModel.LoadDateReviewForTests(CreateReport(@"\\server\share\photos\one.jpg"));
 
             viewModel.ResetCommand.Execute(null);
@@ -280,17 +268,15 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void ReturnToConfigurationLeavesDateWorkWithoutResettingSession()
+    public async Task ReturnToConfigurationLeavesDateWorkWithoutResettingSession()
     {
         var root = NewTempDirectory();
         try
         {
             var viewModel = CreateViewModel(root);
             Assert.False(viewModel.ReturnToConfigurationCommand.CanExecute(null));
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DateWork,
-                TimeSpan.FromSeconds(3)));
+            await viewModel.StartDateWorkForTestsAsync();
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
 
             Assert.True(viewModel.ReturnToConfigurationCommand.CanExecute(null));
             viewModel.ReturnToConfigurationCommand.Execute(null);
@@ -309,7 +295,7 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void StartDateWorkFromReviewingDuplicatesDoesNotRequireReset()
+    public async Task StartDateWorkFromReviewingDuplicatesDoesNotRequireReset()
     {
         var root = NewTempDirectory();
         try
@@ -323,10 +309,8 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
             Assert.True(viewModel.ContinueDuplicateWorkCommand.CanExecute(null));
             Assert.True(viewModel.StartDateWorkCommand.CanExecute(null));
 
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DateWork,
-                TimeSpan.FromSeconds(3)));
+            await viewModel.StartDateWorkForTestsAsync();
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
 
             Assert.Equal(WorkflowState.Reviewing, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
             Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
@@ -341,23 +325,19 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void ConfigureDuplicatesAfterDateWorkDoesNotRequireReset()
+    public async Task ConfigureDuplicatesAfterDateWorkDoesNotRequireReset()
     {
         var root = NewTempDirectory();
         try
         {
             var viewModel = CreateViewModel(root);
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DateWork,
-                TimeSpan.FromSeconds(3)));
+            await viewModel.StartDateWorkForTestsAsync();
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
             viewModel.ReturnToConfigurationCommand.Execute(null);
 
             Assert.True(viewModel.ConfigureDuplicatesCommand.CanExecute(null));
-            viewModel.ConfigureDuplicatesCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DuplicateWork,
-                TimeSpan.FromSeconds(3)));
+            await viewModel.ConfigureDuplicatesForTestsAsync();
+            Assert.Equal(WorkflowPage.DuplicateWork, viewModel.CurrentPage);
 
             Assert.Equal(WorkflowState.Configured, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
             Assert.True(viewModel.ScanDuplicatesCommand.CanExecute(null));
@@ -372,7 +352,7 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void StartDateWorkAfterFinishedDuplicateKeepsAppliedState()
+    public async Task StartDateWorkAfterFinishedDuplicateKeepsAppliedState()
     {
         var root = NewTempDirectory();
         try
@@ -386,10 +366,8 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
             Assert.True(viewModel.ContinueDuplicateWorkCommand.CanExecute(null));
             Assert.True(viewModel.StartDateWorkCommand.CanExecute(null));
 
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DateWork,
-                TimeSpan.FromSeconds(3)));
+            await viewModel.StartDateWorkForTestsAsync();
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
 
             Assert.Equal(WorkflowState.RemediationApplied, Enum.Parse<WorkflowState>(viewModel.WorkflowState));
             Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
@@ -398,16 +376,14 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void DateWorkCommandsFollowScanSnapshotConfirmAndApply()
+    public async Task DateWorkCommandsFollowScanSnapshotConfirmAndApply()
     {
         var root = NewTempDirectory();
         try
         {
             var viewModel = CreateViewModel(root);
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DateWork,
-                TimeSpan.FromSeconds(3)));
+            await viewModel.StartDateWorkForTestsAsync();
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
 
             Assert.True(viewModel.ScanDatesCommand.CanExecute(null));
             Assert.False(viewModel.CreateDateSnapshotCommand.CanExecute(null));
@@ -519,16 +495,14 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void SkippingTheOnlyProposalRecordsSkipWithoutEnablingSnapshot()
+    public async Task SkippingTheOnlyProposalRecordsSkipWithoutEnablingSnapshot()
     {
         var root = NewTempDirectory();
         try
         {
             var viewModel = CreateViewModel(root);
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DateWork,
-                TimeSpan.FromSeconds(3)));
+            await viewModel.StartDateWorkForTestsAsync();
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
             viewModel.LoadDateReviewForTests(CreateReport(@"\\server\share\photos\keep.jpg"));
 
             viewModel.DateItems[0].SkipCommand.Execute(null);
@@ -541,16 +515,14 @@ public sealed class MainViewModelDateWorkflowTests : TestBase
     }
 
     [Fact]
-    public void DateUndoPageOpensFromReviewAndReturnsAfterUndoNavigation()
+    public async Task DateUndoPageOpensFromReviewAndReturnsAfterUndoNavigation()
     {
         var root = NewTempDirectory();
         try
         {
             var viewModel = CreateViewModel(root);
-            viewModel.StartDateWorkCommand.Execute(null);
-            Assert.True(SpinWait.SpinUntil(
-                () => viewModel.CurrentPage == WorkflowPage.DateWork,
-                TimeSpan.FromSeconds(3)));
+            await viewModel.StartDateWorkForTestsAsync();
+            Assert.Equal(WorkflowPage.DateWork, viewModel.CurrentPage);
             viewModel.AddDateUndoForTests(new DateUndoEntry(
                 @"\\server\share\photos\keep.jpg",
                 DateTimeOffset.UtcNow.AddDays(-1),

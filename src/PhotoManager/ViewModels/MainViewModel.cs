@@ -275,6 +275,10 @@ public sealed class MainViewModel : ObservableObject, IShellWorkflowHost
     internal void MarkDateScanInProgressForTests() =>
         DateWork.MarkDateScanInProgressForTests();
 
+    internal Task StartDateWorkForTestsAsync() => DateWork.StartDateWorkForTestsAsync();
+
+    internal Task ConfigureDuplicatesForTestsAsync() => DuplicateWork.ConfigureDuplicatesForTestsAsync();
+
     internal Task StartRotateWorkForTestsAsync() => RotateWork.StartRotateWorkForTestsAsync();
 
     internal Task ScanRotationsForTestsAsync() => RotateWork.ScanRotationsForTestsAsync();
