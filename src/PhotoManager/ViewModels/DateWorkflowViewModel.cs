@@ -209,7 +209,11 @@ public sealed class DateWorkflowViewModel : ObservableObject
         _host.RaiseCommandStates();
     }
 
-    private async void StartDateWork()
+    internal Task StartDateWorkForTestsAsync() => StartDateWorkAsync();
+
+    private async void StartDateWork() => await StartDateWorkAsync();
+
+    private async Task StartDateWorkAsync()
     {
         try
         {
@@ -226,11 +230,11 @@ public sealed class DateWorkflowViewModel : ObservableObject
                 "date-session-config",
                 config);
             _dateWorkStarted = true;
+            await LoadUndoAsync();
             _host.Navigate(WorkflowPage.DateWork);
             _host.SetStatus("Date workflow configured. Scan is read-only.");
             _host.RefreshSession();
             _host.RaiseCommandStates();
-            LoadUndo();
         }
         catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException)
         {
@@ -368,8 +372,6 @@ public sealed class DateWorkflowViewModel : ObservableObject
             _host.SetStatus(exception.Message);
         }
     }
-
-    private void LoadUndo() => _ = LoadUndoAsync();
 
     private async Task LoadUndoAsync()
     {

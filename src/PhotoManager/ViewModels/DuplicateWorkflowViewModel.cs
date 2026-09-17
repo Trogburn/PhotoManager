@@ -92,6 +92,8 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
     internal void MarkConfiguredForTests(AppConfig config) =>
         _duplicateConfig = config ?? throw new ArgumentNullException(nameof(config));
 
+    internal Task ConfigureDuplicatesForTestsAsync() => ConfigureDuplicatesAsync();
+
     internal void Reset()
     {
         _duplicateConfig = null;
@@ -121,7 +123,9 @@ public sealed class DuplicateWorkflowViewModel : ObservableObject
         NotifyDuplicateSurfaceChanged();
     }
 
-    private async void ConfigureDuplicates()
+    private async void ConfigureDuplicates() => await ConfigureDuplicatesAsync();
+
+    private async Task ConfigureDuplicatesAsync()
     {
         try
         {

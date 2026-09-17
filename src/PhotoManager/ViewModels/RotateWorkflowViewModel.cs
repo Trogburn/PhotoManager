@@ -198,11 +198,11 @@ public sealed class RotateWorkflowViewModel : ObservableObject
                 "rotate-session-config",
                 config);
             _workStarted = true;
+            await LoadUndoAsync();
             _host.Navigate(WorkflowPage.RotateWork);
             _host.SetStatus("Rotate workflow configured. Scan is read-only.");
             _host.RefreshSession();
             _host.RaiseCommandStates();
-            LoadUndo();
         }
         catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException)
         {
@@ -361,8 +361,6 @@ public sealed class RotateWorkflowViewModel : ObservableObject
             item.Decision = "Approve";
         }
     }
-
-    private void LoadUndo() => _ = LoadUndoAsync();
 
     private async Task LoadUndoAsync()
     {
