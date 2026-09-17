@@ -284,6 +284,35 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - 2026-09-10: Completed Phase 7 operational polish. Added explicit version/URL/SHA256 update instructions requiring `-Force`, third-party Czkawka attribution, scan/report-only Task Scheduler guidance, a deterministic all-phase validation runner, and a safe local end-to-end Phase 7 test. `run-workflow.ps1` now requires explicit `-AllowLocalRoot` for local fixture validation and otherwise preserves UNC-root safety. Full validation is intended to run via `tests/run-all-tests.ps1`; no delivery phase was advanced.
 - 2026-09-10: Stopped tracking generated `tools/czkawka/tests/temp/` outputs. The directory remains ignored so local parser test runs do not create repository changes; the local files were preserved.
 
+## Phase 8: EXIF Auto-Rotate
+
+**Target:** Add a sibling review-first workflow that bakes approved JPEG/TIFF rotations into stored pixels, with original-byte backups for undo.
+
+**Deliverables**
+
+- [x] Add `tools/czkawka/repair-orientation.ps1` with dry-run scan, decision-file apply, original backups, and undo.
+- [x] Add a WPF rotate sibling workflow from Configuration (Scan → Approve/Skip → snapshot confirm → Apply → Undo).
+- [x] Propose EXIF Orientation 2–8 bake-in; when the tag is Normal or missing, propose a content-based 90°/180° rotation (Windows OCR, faces, conservative sky/scene fallback).
+- [x] Let reviewers override any JPEG/TIFF from the preview (90° CCW / 180° / 90° CW / Reset).
+- [x] Apply copies the original to a local backup, rotates pixels using `proposedOrientation`, sets Orientation to Normal, and re-encodes JPEG. Undo restores backup bytes.
+- [x] Add PowerShell `phase-orientation-tests.ps1`, managed orientation tests, and FlaUI coverage that Start rotate work is enabled and opens the rotate page.
+- [x] Document rotate work in README, GETTING_STARTED, USER_GUIDE, and OPERATIONS.
+
+**Acceptance checks**
+
+- Dry-run proposes Orientation 6 fixtures and leaves already-upright Orientation 1 fixtures unchanged.
+- Content fallback does not rotate labeled dummy charts or already-upright sign photos; sideways FinePix frames with EXIF Normal can still be proposed.
+- Apply changes pixels/dimensions, writes a backup, and undo restores the original SHA-256.
+- Snapshot confirmation is required before Apply, matching date work.
+- Scan changes no media.
+
+**Status:** Complete, 100%
+
+**Agent update log:**
+
+- 2026-09-14: Added `repair-orientation.ps1`, the WPF rotate sibling workflow, content-based proposals (OCR/faces/sky), preview rotate buttons, and `proposedOrientation` apply. PowerShell orientation tests and 105 managed tests (`Category!=UI`) passed. FinePix sample **scan** on the lab share proposed 90° CW for sideways frames and left already-upright signs/charts alone.
+- 2026-09-17: Documented rotate work in USER_GUIDE and OPERATIONS, added the missing Phase 8 section, and put FlaUI desktop tests in CI. Remaining environment-specific checks: WPF Apply + Undo on real FinePix files, QNAP acceptance of `QPM-ROT-...` snapshot names, and a production photo tree. Automated apply/undo coverage is fixture-based.
+
 ## Future Decisions
 
 1. **Quarantine location:** same share preserves local disk space and avoids copying large files; local quarantine may simplify recovery. Keep it configurable and test a dedicated folder on the same share first.
@@ -299,3 +328,4 @@ The source of truth for product direction and safety decisions is [PLAN.md](PLAN
 - 2026-09-08: Moved the canonical agent instructions to `.github/copilot-instructions.md`; phase percentages remain unchanged.
 - 2026-09-09: Completed Phases 1-3 (CLI install/scan capture, upstream JSON normalization, timezone-aware date repair). Overall progress is 80%.
 - 2026-09-10: Recorded read-only production UNC validation on a small photo subset; large trees left unscanned.
+- 2026-09-17: Added the Phase 8 auto-rotate section and log; USER_GUIDE and OPERATIONS now mention rotate work.

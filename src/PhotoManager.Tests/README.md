@@ -27,7 +27,8 @@ every local change and after publishing a new build.
 
 The separate `PhotoManager.UiTests` project contains FlaUI desktop
 automation. Those tests open the WPF app and therefore are tagged `UI`, run
-serially, and force-close each launched instance. Run them explicitly:
+serially, and force-close each launched instance. CI runs them after the
+non-UI suite. Run them locally with:
 
 ```powershell
 dotnet test .\src\PhotoManager.UiTests\PhotoManager.UiTests.csproj -c Release

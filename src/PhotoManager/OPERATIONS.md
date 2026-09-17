@@ -2,9 +2,10 @@
 
 PhotoManager is a Windows desktop shell for a review-first photo workflow. It
 does not require a live NAS share to build, test, or inspect local artifacts.
-The current WPF application owns configuration, date-review boundaries, artifact
-integrity, and workflow state; the PowerShell/Czkawka adapters perform the
-actual scan and remediation work.
+The current WPF application owns configuration, date-review and rotate-review
+boundaries, artifact integrity, and workflow state; the PowerShell/Czkawka
+adapters perform the actual scan, date repair, orientation repair, and
+remediation work.
 
 ## Install and upgrade
 
@@ -56,12 +57,14 @@ procedure, not by copying an arbitrary executable into the publish directory.
 2. Set an artifact root on a local, user-writable disk. Artifacts are evidence
    and should not be placed inside the source photo tree.
 3. Run a read-only scan and inspect the generated raw, normalized, classified,
-   review, and date evidence artifacts.
-4. Review one group or date proposal at a time. Protected and excluded paths
-   remain protected by the PowerShell workflow; advisory keep recommendations
-   are not approvals.
-5. Use a dry run before remediation. Confirm the frozen artifact snapshot only
-   after reviewing it. Remediation is quarantine-only, never direct deletion.
+   review, date evidence, and orientation-review artifacts.
+4. Review one group, date proposal, or rotation proposal at a time. Protected
+   and excluded paths remain protected by the PowerShell workflow; advisory
+   keep recommendations are not approvals.
+5. Use a dry run before remediation or pixel rewrite. Confirm the frozen
+   artifact snapshot only after reviewing it. Duplicate remediation is
+   quarantine-only, never direct deletion. Rotate Apply bakes pixels and
+   keeps a local original backup.
 6. Keep the transaction and undo manifests with the session artifacts. Do not
    edit them by hand.
 
@@ -88,6 +91,9 @@ If a scan, review, or adapter fails:
 - Restore timestamp changes only through the date undo manifest. CreationTime is
   the default date policy; LastWriteTime is preserved unless explicitly
   selected.
+- Restore baked-in rotations only through the orientation undo command in
+  `tools\czkawka\repair-orientation.ps1` (or Undo applied rotations in the
+  app). Undo restores backup bytes; it does not inverse-rotate.
 
 Maintain an independent backup of the photo tree. Quarantine and undo are
 recovery mechanisms, not backups. Before deleting quarantine contents, verify
@@ -97,7 +103,7 @@ sample in the normal photo application.
 ## Scope limitations
 
 The WPF shell is intentionally incremental. It currently provides the session
-and review boundaries; the complete scan, classification, date-repair, and
-quarantine behavior remains in the repository's PowerShell adapters. A successful
-WPF build or validation run must not be interpreted as a successful production
-scan.
+and review boundaries; the complete scan, classification, date-repair,
+orientation-repair, and quarantine behavior remains in the repository's
+PowerShell adapters. A successful WPF build or validation run must not be
+interpreted as a successful production scan.

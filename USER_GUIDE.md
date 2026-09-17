@@ -10,6 +10,8 @@ This guide is for running the workflow on Windows with minimal PowerShell knowle
 
 The normal one-command workflow stops at the reviewer. It never moves, deletes, renames, or changes timestamps.
 
+The Photo Manager WPF app also offers sibling **date repair** and **auto-rotate** workflows from Configuration. Those stay dry-run until you Apply. See [GETTING_STARTED.md](tools/packaging/GETTING_STARTED.md) for the zip install path.
+
 ## Before First Use
 
 Open PowerShell 7 in the repository folder.
@@ -213,10 +215,36 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-dat
   -UndoManifestPath .\reports\dates\date-undo.jsonl
 ```
 
+## Orientation Review
+
+Orientation repair is a sibling workflow and is dry-run by default. In the WPF app, choose **Start rotate work**, Scan, review proposals, confirm a snapshot, then Apply. Preview rotate buttons (90° / 180°) override a miss. Apply copies the original to a local backup, bakes the rotation into JPEG/TIFF pixels, and sets EXIF Orientation to Normal. Undo restores the backup bytes; it does not inverse-rotate.
+
+From PowerShell:
+
+```powershell
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-orientation.ps1 `
+  -Path "\\server\photos" `
+  -Recurse
+```
+
+Apply approved decisions, then undo from backups if needed:
+
+```powershell
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-orientation.ps1 `
+  -ReviewPath .\reports\rotate\orientation-review.json `
+  -DecisionPath .\reports\rotate\orientation-decisions.json `
+  -Apply
+
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\repair-orientation.ps1 `
+  -Undo `
+  -UndoManifestPath .\reports\rotate\orientation-undo.jsonl
+```
+
 ## Safety Rules
 
 - Run the normal workflow before remediation.
 - Review the dry-run output before using `-Apply`.
+- Do not rewrite image pixels until you Apply rotations.
 - Never use Czkawka deletion options.
 - Keep protected and reference paths configured.
 - Keep transaction manifests and undo files.
@@ -259,6 +287,7 @@ pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phas
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase5-tests.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase6-tests.ps1
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase7-tests.ps1
+pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\phase-orientation-tests.ps1
 
 # One command for the complete suite and safe end-to-end check
 pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\tools\czkawka\tests\run-all-tests.ps1
