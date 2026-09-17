@@ -125,3 +125,9 @@ Task Scheduler is optional and must run only the read-only scan/report path. Con
 - Saved reports are revalidated for file size and LastWriteTime before changes. Decision files support `skip`, `protect`, `approve`, and `manual` actions; manual decisions must include a `date` value.
 - Classification is advisory only. It merges overlapping findings, retains original evidence edges plus repeated-path metadata/warning/access/stale evidence, marks protected/reference items, and never deletes, moves, or changes timestamps. Protected and preferred directory rules match complete directory boundaries rather than similarly named sibling folders.
 - Remediation is quarantine-only and dry-run by default. It revalidates size and modified time plus comparable 64-hex SHA-256 evidence, refuses stale/protected/excluded files, uses collision-safe destinations, and appends transaction entries with explicit pre-move and post-move evidence for guarded undo. Permission failures leave the source in place and are logged; it never enables Czkawka deletion flags.
+
+## Sponsors
+
+Thanks to our sponsors.
+
+[Become a sponsor](https://github.com/sponsors/Trogburn)
